@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:qr_flutter/qr_flutter.dart'; // ← THÊM IMPORT
 import '../../services/api_service.dart';
 import 'home_screen.dart';
-// Removed unused imports: provider and auth_service
 
 class PaymentScreen extends StatefulWidget {
   final int appointmentId;
@@ -26,22 +26,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
   String? _paymentCode;
   bool _isProcessing = false;
   String? _errorMessage;
+  String? _qrCodeUrl; // ← THÊM BIẾN LƯU QR CODE
+  String? _paymentUrl; // ← THÊM BIẾN LƯU PAYMENT URL
 
   @override
   void initState() {
     super.initState();
-    // Bắt đầu bằng việc tạo bản ghi thanh toán nếu chưa có
     _createPaymentRecord();
   }
 
-  // Bước 1: Tạo bản ghi Payment Pending (Endpoint: /api/payment/create)
   Future<void> _createPaymentRecord() async {
     setState(() {
       _isProcessing = true;
       _errorMessage = null;
     });
 
-    // Lỗi có thể xảy ra ở đây nếu bạn chưa tạo Service ID 1 trong DB
     final result = await _apiService.createPaymentRecord(
       widget.appointmentId,
       double.parse(widget.amount),
@@ -62,10 +61,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  // Bước 2 & 3: Khởi tạo và mở cổng MoMo (Endpoint: /api/payment/momo/create)
   Future<void> _initiateMomoPayment() async {
     if (_paymentId == null || _paymentCode == null) {
-      _errorMessage = 'Lỗi: Không tìm thấy ID thanh toán.';
+      setState(() {
+        _errorMessage = 'Lỗi: Không tìm thấy ID thanh toán.';
+      });
       return;
     }
 
@@ -82,27 +82,152 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     if (result['success']) {
       final payUrl = result['data']['payment_url'];
-      if (await canLaunchUrl(Uri.parse(payUrl))) {
-        await launchUrl(Uri.parse(payUrl),
-            mode: LaunchMode.externalApplication);
-      } else {
-        _errorMessage = 'Không thể mở cổng thanh toán MoMo.';
-        return;
-      }
+      final qrUrl = result['data']['qr_code_url'];
 
-      // Chuyển sang màn hình chờ xác nhận ngay sau khi mở trình duyệt
+      setState(() {
+        _paymentUrl = payUrl;
+        _qrCodeUrl = qrUrl;
+      });
+
+      // ✅ HIỂN thị QR CODE DIALOG
       if (mounted) {
-        Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (_) =>
-                    PaymentStatusScreen(paymentCode: _paymentCode!)));
+        _showQRCodeDialog(qrUrl, payUrl);
       }
     } else {
       setState(() {
         _errorMessage = result['error'] ?? 'Khởi tạo MoMo thất bại.';
       });
     }
+  }
+
+  // ✅ DIALOG HIỂN THỊ QR CODE
+  void _showQRCodeDialog(String qrUrl, String payUrl) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Logo MoMo
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.pink.shade500,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Icon(
+                    Icons.payment,
+                    color: Colors.white,
+                    size: 35,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Thanh toán MoMo',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Quét mã QR để thanh toán',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // ✅ QR CODE
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300, width: 2),
+                  ),
+                  child: QrImageView(
+                    data: qrUrl,
+                    version: QrVersions.auto,
+                    size: 250,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                Text(
+                  'Mã thanh toán: $_paymentCode',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Nút hành động
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Nút Mở link (nếu có trình duyệt)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final uri = Uri.parse(payUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri,
+                                mode: LaunchMode.externalApplication);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Không thể mở link')),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.open_in_browser),
+                        label: const Text('Mở link'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Nút Tiếp tục
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          // Chuyển sang màn hình check status
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PaymentStatusScreen(
+                                paymentCode: _paymentCode!,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.check),
+                        label: const Text('Đã thanh toán'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -122,14 +247,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
               color: Colors.blue.shade50,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Mã hẹn: ${widget.appointmentCode}',
-                        style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      'Mã hẹn: ${widget.appointmentCode}',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 8),
                     const Text('Dịch vụ: Khám chuyên khoa (Giả định)'),
                     const Divider(),
@@ -140,39 +268,49 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           .headlineSmall
                           ?.copyWith(color: Colors.red),
                     ),
-                    const Text('Trạng thái: Đang chờ thanh toán',
-                        style: TextStyle(color: Colors.orange)),
+                    Text(
+                      _paymentCode != null
+                          ? 'Trạng thái: Đang chờ thanh toán'
+                          : 'Trạng thái: Đang tạo giao dịch...',
+                      style: const TextStyle(color: Colors.orange),
+                    ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            Text('Chọn Phương thức Thanh toán',
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Chọn Phương thức Thanh toán',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 12),
             if (_errorMessage != null)
-              Text(_errorMessage!,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  _errorMessage!,
                   style: const TextStyle(
-                      color: Colors.red, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-
-            // Nút Thanh toán MoMo
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             _buildPaymentButton(
               'Thanh toán bằng MoMo',
               Colors.pink.shade500,
               _initiateMomoPayment,
             ),
-
             const SizedBox(height: 32),
-            if (_isProcessing || _paymentId == null)
+            if (_isProcessing)
               const Center(
-                  child: Column(
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 8),
-                  Text('Đang tải thông tin giao dịch...')
-                ],
-              )),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 8),
+                    Text('Đang xử lý...'),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
@@ -183,26 +321,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: OutlinedButton(
-        // Vô hiệu hóa nút nếu đang xử lý hoặc chưa có ID thanh toán
         onPressed: _isProcessing || _paymentId == null ? null : onTap,
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 15),
           side: BorderSide(color: color, width: 2),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-                width: 30,
-                height: 30,
-                color: color,
-                margin: const EdgeInsets.only(right: 10)),
+              width: 30,
+              height: 30,
+              color: color,
+              margin: const EdgeInsets.only(right: 10),
+            ),
             Text(
               title,
               style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: color),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
           ],
         ),
@@ -211,7 +353,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 }
 
-// Màn hình chờ kiểm tra trạng thái thanh toán
+// ============================================
+// MÀN HÌNH KIỂM TRA TRẠNG THÁI
+// ============================================
 class PaymentStatusScreen extends StatefulWidget {
   final String paymentCode;
   const PaymentStatusScreen({super.key, required this.paymentCode});
@@ -224,6 +368,7 @@ class _PaymentStatusScreenState extends State<PaymentStatusScreen> {
   final ApiService _apiService = ApiService();
   String _statusMessage = 'Đang chờ xác nhận thanh toán...';
   bool _isChecking = true;
+  int _checkCount = 0;
 
   @override
   void initState() {
@@ -231,23 +376,31 @@ class _PaymentStatusScreenState extends State<PaymentStatusScreen> {
     _startStatusCheck();
   }
 
-  // Hàm kiểm tra trạng thái lặp lại
   void _startStatusCheck() async {
-    // Lặp lại việc kiểm tra trạng thái 5 lần, mỗi lần 5 giây
-    for (int i = 0; i < 5; i++) {
-      await Future.delayed(const Duration(seconds: 5));
+    for (int i = 0; i < 10; i++) {
+      await Future.delayed(const Duration(seconds: 3));
 
-      // Gọi API Flask để check trạng thái Payment trong DB
+      if (!mounted) return;
+
       final result = await _apiService.checkPaymentStatus(widget.paymentCode);
 
       if (result['success']) {
         final status = result['data']['payment_status'];
+
         if (status == 'completed') {
           setState(() {
             _statusMessage =
                 'Thanh toán thành công! Lịch hẹn đã được xác nhận.';
             _isChecking = false;
           });
+
+          await Future.delayed(const Duration(seconds: 2));
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+              (Route<dynamic> route) => false,
+            );
+          }
           return;
         } else if (status == 'failed') {
           setState(() {
@@ -260,16 +413,16 @@ class _PaymentStatusScreenState extends State<PaymentStatusScreen> {
 
       if (mounted) {
         setState(() {
-          _statusMessage = 'Đang chờ xác nhận... Lần ${i + 1}/5';
+          _checkCount = i + 1;
+          _statusMessage = 'Đang chờ xác nhận... ($_checkCount/10)';
         });
       }
     }
 
-    // Nếu hết 5 lần kiểm tra mà vẫn chưa completed
     if (mounted && _isChecking) {
       setState(() {
         _statusMessage =
-            'Không thể xác nhận trạng thái. Vui lòng kiểm tra lịch hẹn của bạn.';
+            'Không thể xác nhận trạng thái. Vui lòng kiểm tra lịch hẹn của bạn sau.';
         _isChecking = false;
       });
     }
@@ -314,16 +467,17 @@ class _PaymentStatusScreenState extends State<PaymentStatusScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 40),
-              ElevatedButton(
-                onPressed: () {
-                  // Quay về màn hình chính
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const HomeScreen()),
-                    (Route<dynamic> route) => false,
-                  );
-                },
-                child: const Text('Quay về Trang chủ'),
-              )
+              if (!_isChecking)
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                          builder: (context) => const HomeScreen()),
+                      (Route<dynamic> route) => false,
+                    );
+                  },
+                  child: const Text('Quay về Trang chủ'),
+                ),
             ],
           ),
         ),

@@ -1,24 +1,25 @@
 from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager
 from config import Config
+from dotenv import load_dotenv
 from models import SystemSetting, db, bcrypt
-# --- IMPORT TẤT CẢ CÁC BLUEPRINTS ---
 from routes.auth_routes import auth_bp
 from routes.public_routes import public_bp
 from routes.booking_routes import booking_bp
 from routes.general_routes import general_bp
-from routes.payment_router import payment_bp      # Đã thêm
-from routes.doctor_router import doctor_bp        # Đã thêm
-from routes.patient_routes import patient_bp      # Đã thêm
-from routes.admin_routers import admin_bp         # Đã thêm
-from routes.password_reset_routers import password_reset_bp # Đã thêm
-from routes.notification_routers import notification_bp # Đã thêm
-from routes.search_routers import search_bp       # Đã thêm
-from routes.stats_routers import stats_bp         # Đã thêm
+from routes.payment_routers import payment_bp      
+from routes.doctor_routers import doctor_bp        
+from routes.patient_routes import patient_bp      
+from routes.admin_routers import admin_bp        
+from routes.password_reset_routers import password_reset_bp 
+from routes.notification_routers import notification_bp 
+from routes.search_routers import search_bp     
+from routes.stats_routers import stats_bp      
 from utils import log_activity, generate_code, get_system_setting
 import click
 
 def create_app(config_class=Config):
+    load_dotenv()
     app = Flask(__name__) 
     app.config.from_object(config_class)
 
@@ -64,9 +65,7 @@ def create_app(config_class=Config):
     app.register_blueprint(notification_bp, url_prefix='/api/notifications')
     app.register_blueprint(search_bp, url_prefix='/api/search')
     app.register_blueprint(stats_bp, url_prefix='/api/stats')
-    # ---------------------------------------------------
     
-    # 4. ĐỊNH NGHĨA LỆNH CLI
     @app.cli.command("init-db")
     def init_db():
         """Tạo các bảng CSDL và chèn dữ liệu mẫu nếu cần"""
