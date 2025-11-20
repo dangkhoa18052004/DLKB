@@ -1,21 +1,11 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import 'book_appointment_screen.dart';
+// Sử dụng prefix để tham chiếu BookAppointmentScreen (Đã đúng)
+import 'book_appointment_screen.dart' as BAS;
+// THAY THẾ: Import model Doctor chung (Đã đúng)
+import '../models/doctor.dart';
 
-class Doctor {
-  final int id;
-  final String fullName;
-  final String specialization;
-  final double rating;
-  final String consultationFee;
-
-  Doctor.fromJson(Map<String, dynamic> json)
-      : id = json['id'],
-        fullName = json['full_name'],
-        specialization = json['specialization'],
-        rating = json['rating'].toDouble(),
-        consultationFee = json['consultation_fee'];
-}
+// XÓA ĐỊNH NGHĨA CLASS DOCTOR NẾU NÓ VẪN TỒN TẠI TRONG FILE NÀY
 
 class SelectDoctorScreen extends StatelessWidget {
   final int departmentId;
@@ -45,6 +35,7 @@ class SelectDoctorScreen extends StatelessWidget {
           }
 
           final List<Doctor> doctors = (snapshot.data!['data'] as List)
+              // SỬ DỤNG Doctor.fromJson từ model chung
               .map((json) => Doctor.fromJson(json))
               .toList();
 
@@ -101,7 +92,9 @@ class SelectDoctorScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => BookAppointmentScreen(
+                          builder: (context) => BAS.BookAppointmentScreen(
+                            // SỬ DỤNG PREFIX
+                            // TRUYỀN ĐÚNG OBJECT DOCTOR TỪ MODEL CHUNG
                             doctor: doctor,
                             departmentId: departmentId,
                             departmentName: departmentName,

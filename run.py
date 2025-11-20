@@ -89,7 +89,16 @@ def create_app(config_class=Config):
 
     return app
 
+
 app = create_app()
 
 if __name__ == '__main__':
+    print("\n" + "="*60)
+    print("📋 DANH SÁCH TẤT CẢ ROUTES ĐÃ ĐĂNG KÝ:")
+    print("="*60)
+    for rule in app.url_map.iter_rules():
+        methods = ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
+        print(f"{rule.endpoint:50s} {methods:10s} {rule.rule}")
+    print("="*60 + "\n")
+    
     app.run(debug=True, host='0.0.0.0', port=5000)

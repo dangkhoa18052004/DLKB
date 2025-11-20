@@ -2,11 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import 'payment_screen.dart';
-import 'select_doctor_screen.dart';
+// THÊM: Import model Doctor chung
+import '../models/doctor.dart';
 
-// [Giữ nguyên class Doctor, SelectDoctorScreen]
+// Giả định SelectDoctorScreen là nơi trả về Doctor object
+class SelectDoctorScreen extends StatelessWidget {
+  const SelectDoctorScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text("Chọn bác sĩ"));
+  }
+}
 
 class BookAppointmentScreen extends StatefulWidget {
+  // SỬ DỤNG CLASS DOCTOR TỪ MODEL CHUNG
   final Doctor doctor;
   final int departmentId;
   final String departmentName;
@@ -79,7 +88,7 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
 
     final appointmentData = {
       'doctor_id': widget.doctor.id,
-      'service_id': 1,
+      'service_id': 1, // Giả định service ID
       'appointment_date': DateFormat('yyyy-MM-dd').format(_selectedDate),
       'appointment_time': _selectedTimeSlot,
       'reason': reasonText.isEmpty ? null : reasonText,
@@ -95,9 +104,25 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     });
 
     if (result['success']) {
-      final appointmentCode = result['data']['appointment_code'];
-      final appointmentId = result['data']['appointment_id'];
-      final requiredPayment = result['data']['required_payment'];
+      final Map<String, dynamic> data = result['data'];
+
+      // ✅ KIỂM TRA TỪNG GIÁ TRỊ VÀ ÉP KIỂU AN TOÀN
+      final int? appointmentId =
+          data['appointment_id'] is int ? data['appointment_id'] : null;
+      final int? paymentId =
+          data['payment_id'] is int ? data['payment_id'] : null;
+
+      final appointmentCode = data['appointment_code'] as String? ?? 'N/A';
+      final requiredPayment =
+          double.tryParse(data['required_payment'].toString()) ?? 0.0;
+
+      // KIỂM TRA LỖI: Nếu bất kỳ ID nào là null, báo lỗi backend
+      if (appointmentId == null || paymentId == null) {
+        _showSnackBar(
+            'Lỗi hệ thống: API không trả về đủ ID Lịch hẹn hoặc ID Thanh toán.',
+            Colors.red);
+        return;
+      }
 
       // CHUYỂN HƯỚNG SANG MÀN HÌNH THANH TOÁN
       if (mounted) {
@@ -105,9 +130,12 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
           context,
           MaterialPageRoute(
             builder: (context) => PaymentScreen(
+              // Truyền các giá trị đã được kiểm tra và chắc chắn là int/double
               appointmentId: appointmentId,
               appointmentCode: appointmentCode,
               amount: requiredPayment,
+              paymentId: paymentId,
+              doctorName: widget.doctor.fullName,
             ),
           ),
         );
@@ -123,11 +151,8 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
     );
   }
 
-  // HÀM _showBookingSuccess ĐÃ ĐƯỢC XÓA
-
   @override
   Widget build(BuildContext context) {
-    // [Giữ nguyên phần build]
     return Scaffold(
       appBar: AppBar(
         title: const Text('3. Xác nhận đặt lịch'),
@@ -157,12 +182,15 @@ class _BookAppointmentScreenState extends State<BookAppointmentScreen> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.check_circle),
-                label: Text(_isBooking ? 'Đang xử lý...' : 'Xác nhận Đặt lịch'),
+                    : const Icon(Icons.payment), // Thay icon sang thanh toán
+                label: Text(_isBooking
+                    ? 'Đang tạo lịch hẹn...'
+                    : 'Tiến hành Thanh toán'),
                 style: ElevatedButton.styleFrom(
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
-                  backgroundColor: Colors.green,
+                  // Dùng màu cam (secondary) cho nút chuyển sang thanh toán
+                  backgroundColor: Theme.of(context).colorScheme.secondary,
                   foregroundColor: Colors.white,
                 ),
               ),

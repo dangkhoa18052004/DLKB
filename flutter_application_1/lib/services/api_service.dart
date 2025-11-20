@@ -1,10 +1,11 @@
+// api_service.dart
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   // Đảm bảo IP này là chính xác
-  // Sử dụng IP VÀ CỔNG CỦA MÁY TÍNH WINDOWS
   static const String baseUrl = 'http://192.168.100.151:5000/api';
 
   Future<String?> getToken() async {
@@ -428,7 +429,7 @@ class ApiService {
         }),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (response.statusCode == 201) {
         return {'success': true, 'data': jsonDecode(response.body)};
       } else {
         final body = jsonDecode(response.body);
@@ -445,23 +446,40 @@ class ApiService {
   // Initiate MoMo payment and get redirect URL
   Future<Map<String, dynamic>> initiateMomoPayment(int paymentId) async {
     try {
+      final url = '$baseUrl/payment/initiate-momo';
+
+      print('==============================================');
+      print('🔵 [DEBUG] Base URL: $baseUrl');
+      print('🔵 [DEBUG] Full URL: $url');
+      print('🔵 [DEBUG] Payment ID: $paymentId');
+      print('==============================================');
+
       final response = await http.post(
-        Uri.parse('$baseUrl/payment/momo/create'),
+        Uri.parse(url),
         headers: await getHeaders(),
         body: jsonEncode({'payment_id': paymentId}),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return {'success': true, 'data': jsonDecode(response.body)};
+      print('[API] MoMo Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'data': jsonDecode(response.body),
+        };
       } else {
         final body = jsonDecode(response.body);
         return {
           'success': false,
-          'error': body['msg'] ?? 'Failed to initiate MoMo'
+          'error': body['msg'] ?? 'Failed to initiate MoMo',
         };
       }
     } catch (e) {
-      return {'success': false, 'error': 'Connection error: $e'};
+      print('[API ERROR] initiateMomoPayment: $e');
+      return {
+        'success': false,
+        'error': 'Connection error: $e',
+      };
     }
   }
 
@@ -480,6 +498,89 @@ class ApiService {
         return {
           'success': false,
           'error': body['msg'] ?? 'Failed to check status'
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // ===================================
+  // === REVIEW & FEEDBACK APIs (NEW) ===
+  // ===================================
+
+  // 1. Get My Reviews (Endpoint: /patient/reviews/my)
+  Future<Map<String, dynamic>> getMyReviews() async {
+    try {
+      // Đã sửa URL để khớp với Blueprint: /api/patient/reviews/my
+      final response = await http.get(
+        Uri.parse('$baseUrl/patient/reviews/my'),
+        headers: await getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decodedBody = jsonDecode(response.body);
+
+        // Vì patient_routes.py trả về List trực tiếp, ta cần xử lý List này
+        return {
+          'success': true,
+          'data': decodedBody is List ? decodedBody : []
+        };
+      } else {
+        final body = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': body['msg'] ?? 'Failed to load reviews'
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // 2. Submit Review (Endpoint: /general/reviews)
+  Future<Map<String, dynamic>> submitReview(
+      Map<String, dynamic> reviewData) async {
+    try {
+      // Đã sửa URL để khớp với Blueprint: /api/general/reviews
+      final response = await http.post(
+        Uri.parse('$baseUrl/general/reviews'),
+        headers: await getHeaders(),
+        body: jsonEncode(reviewData),
+      );
+
+      if (response.statusCode == 201) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        final body = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': body['msg'] ?? 'Failed to submit review'
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // 3. Submit Feedback (Endpoint: /general/feedback)
+  Future<Map<String, dynamic>> submitFeedback(
+      Map<String, dynamic> feedbackData) async {
+    try {
+      // Đã sửa URL để khớp với Blueprint: /api/general/feedback
+      final response = await http.post(
+        Uri.parse('$baseUrl/general/feedback'),
+        headers: await getHeaders(),
+        body: jsonEncode(feedbackData),
+      );
+
+      if (response.statusCode == 201) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        final body = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': body['msg'] ?? 'Failed to submit feedback'
         };
       }
     } catch (e) {

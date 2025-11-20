@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
-
-// Import các màn hình (giữ các màn hình được sử dụng)
 import 'select_department_screen.dart';
 import 'my_appointment_screen.dart';
 import 'medical_history_screen.dart';
@@ -11,6 +9,9 @@ import 'profile_screen.dart';
 import 'dashboard_screen.dart';
 import 'search_screen.dart';
 import 'notifications_screen.dart';
+import 'feedback_review_screen.dart';
+import 'payment_history_screen.dart';
+import 'payment_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -21,7 +22,6 @@ class HomeScreen extends StatelessWidget {
     final userRole = authService.user?['role'] ?? 'patient';
     final userName = authService.user?['full_name'] ?? 'User';
 
-    // Điều hướng theo role
     Widget bodyContent;
 
     switch (userRole) {
@@ -30,7 +30,6 @@ class HomeScreen extends StatelessWidget {
         bodyContent = const DashboardScreen();
         break;
       case 'doctor':
-        // No dedicated doctor dashboard file; reuse main DashboardScreen for now
         bodyContent = const DashboardScreen();
         break;
       case 'patient':
@@ -46,7 +45,6 @@ class HomeScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // Notification Icon
           IconButton(
             icon: Stack(
               children: [
@@ -69,14 +67,12 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
             onPressed: () {
-              // Mở màn hình Thông báo
               Navigator.push(
                   context,
                   MaterialPageRoute(
                       builder: (_) => const NotificationsScreen()));
             },
           ),
-          // Profile Icon
           IconButton(
             icon: const Icon(Icons.account_circle),
             onPressed: () {
@@ -252,9 +248,9 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             'Xin chào,',
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white70,
               fontSize: 16,
             ),
@@ -269,9 +265,9 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
+          const Text(
             'Chúc bạn một ngày khỏe mạnh! 💚',
-            style: const TextStyle(
+            style: TextStyle(
               color: Colors.white,
               fontSize: 14,
             ),
@@ -482,10 +478,11 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
                   Icons.payment,
                   Colors.teal,
                   () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'Chức năng Lịch sử thanh toán đang phát triển')),
+                    // SỬA: Điều hướng đến màn hình Lịch sử Thanh toán
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const PaymentHistoryScreen()),
                     );
                   },
                 ),
@@ -497,10 +494,11 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
                   Icons.feedback,
                   Colors.red,
                   () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content:
-                              Text('Chức năng Gửi phản hồi đang phát triển')),
+                    // SỬA: Thay thế SnackBar bằng điều hướng đến FeedbackReviewScreen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const FeedbackReviewScreen()),
                     );
                   },
                 ),

@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Appointment, Doctor, DoctorSchedule, Service, User
+from models import Payment, db, Appointment, Doctor, DoctorSchedule, Service, User
 from utils import log_activity, generate_code, get_patient_id_from_user, get_system_setting
 from datetime import datetime, timedelta, time
 from sqlalchemy.exc import SQLAlchemyError
@@ -96,20 +96,20 @@ def create_appointment():
         # Trả lỗi chi tiết hơn nếu thiếu trường bắt buộc
         return jsonify({"msg": f"Missing or invalid data field: {e}"}), 400
     except Exception as e:
-         # Lỗi không rõ nguyên nhân, có thể do JSON bị hỏng
-         return jsonify({"msg": f"Critical error parsing JSON: {str(e)}"}), 400
+          # Lỗi không rõ nguyên nhân, có thể do JSON bị hỏng
+          return jsonify({"msg": f"Critical error parsing JSON: {str(e)}"}), 400
 
 
     now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
     appointment_dt_utc = datetime.combine(appointment_date, appointment_time).replace(tzinfo=pytz.utc)
     if appointment_dt_utc < now_utc:
-         return jsonify({"msg": "Cannot book an appointment in the past"}), 400
+          return jsonify({"msg": "Cannot book an appointment in the past"}), 400
 
     doctor = Doctor.query.get(doctor_id)
     service = Service.query.get(service_id)
     if not doctor or not service:
-         return jsonify({"msg": "Doctor or Service not found"}), 404
-         
+          return jsonify({"msg": "Doctor or Service not found"}), 404
+          
     existing_appointment = Appointment.query.filter(
         Appointment.doctor_id == doctor_id,
         Appointment.appointment_date == appointment_date,
@@ -119,6 +119,7 @@ def create_appointment():
     if existing_appointment:
         return jsonify({"msg": "This time slot is already booked"}), 409
 
+    # --- 1. TẠO APPOINTMENT ---
     new_appointment = Appointment(
         appointment_code=generate_code(prefix='AP', length=10),
         patient_id=patient_id,
@@ -132,21 +133,50 @@ def create_appointment():
         symptoms=data.get('symptoms')
     )
 
+    # --- 2. TẠO PAYMENT RECORD (STATUS: PENDING) ---
+    payment_code = generate_code('PAY', length=12) # Generate mã thanh toán
+    
+    new_payment = Payment(
+        payment_code=payment_code,
+        appointment_id=None, # Tạm thời để None, sẽ gán sau khi commit hoặc dùng appointment_id
+        patient_id=patient_id,
+        amount=service.price,
+        payment_method='momo', # Giả định mặc định là MoMo
+        payment_status='pending',
+        description=f'Thanh toán khám bệnh: {new_appointment.appointment_code}'
+    )
+    
     try:
+        # Thêm Appointment trước để có ID
         db.session.add(new_appointment)
+        db.session.flush() # Lấy ID của new_appointment trước khi commit
+
+        # Gán appointment_id cho payment
+        new_payment.appointment_id = new_appointment.id 
+        db.session.add(new_payment)
+
         db.session.commit()
+        
         log_activity(user_id, "CREATE_APPOINTMENT", "appointment", new_appointment.id, f"Booked AP code: {new_appointment.appointment_code}")
         
+        # --- 3. TRẢ VỀ CẢ HAI ID ---
         return jsonify({
-            "msg": "Appointment created successfully", 
+            "msg": "Appointment and Payment created successfully", 
             "appointment_id": new_appointment.id, 
             "appointment_code": new_appointment.appointment_code,
-            "required_payment": str(service.price)
+            "required_payment": str(service.price), # Service.price là Decimal, cần chuyển sang string
+            "payment_id": new_payment.id 
         }), 201
         
     except SQLAlchemyError as e:
         db.session.rollback()
+        # In lỗi chi tiết ra console
+        print(f"SQLAlchemy Error: {e}") 
         return jsonify({"msg": f"Database error during booking: {str(e)}"}), 500
+    except Exception as e:
+        db.session.rollback()
+        print(f"Critical Error: {e}") 
+        return jsonify({"msg": f"Critical server error: {str(e)}"}), 500
 
 @booking_bp.route('/appointments/me', methods=['GET'])
 @jwt_required()

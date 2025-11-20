@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
-import 'reschedule_appointment_screen.dart'; // Import màn hình đổi lịch mới
+import 'reschedule_appointment_screen.dart';
+// THÊM: Import màn hình FeedbackReviewScreen
+import 'feedback_review_screen.dart';
 
 class MyAppointmentsScreen extends StatefulWidget {
   const MyAppointmentsScreen({super.key});
@@ -228,7 +230,8 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen>
     final String date = appointment['date'] ?? '';
     final String time = appointment['time'] ?? '';
     final String doctorName = appointment['doctor_name'] ?? 'N/A';
-    final int appointmentId = appointment['id'];
+    final int? appointmentId =
+        appointment['id']; // Lấy ID (có thể null nếu data lỗi)
 
     Color statusColor = _getStatusColor(status);
     String statusText = _getStatusText(status);
@@ -325,15 +328,17 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen>
               ),
 
               // Action Buttons
-              if (status == 'pending' || status == 'confirmed')
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Row(
-                    children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Row(
+                  children: [
+                    if (status == 'pending' || status == 'confirmed') ...[
+                      // HỦY LỊCH
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: () =>
-                              _cancelAppointment(appointmentId, code),
+                          onPressed: appointmentId != null
+                              ? () => _cancelAppointment(appointmentId, code)
+                              : null,
                           icon: const Icon(Icons.cancel_outlined, size: 18),
                           label: const Text('Hủy lịch'),
                           style: OutlinedButton.styleFrom(
@@ -343,9 +348,14 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen>
                         ),
                       ),
                       const SizedBox(width: 8),
+
+                      // ĐỔI LỊCH
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () => _rescheduleAppointment(appointment),
+                          // SỬA LỖI: Bọc hàm gọi bên trong hàm ẩn danh
+                          onPressed: appointmentId != null
+                              ? () => _rescheduleAppointment(appointment)
+                              : null,
                           icon: const Icon(Icons.event_repeat, size: 18),
                           label: const Text('Đổi lịch'),
                           style: ElevatedButton.styleFrom(
@@ -355,13 +365,52 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen>
                         ),
                       ),
                     ],
-                  ),
+
+                    // ĐÁNH GIÁ (CHỈ HIỆN KHI status = 'completed')
+                    if (status == 'completed')
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: appointmentId != null
+                              ? () => _navigateToFeedback(
+                                  appointmentId, code, doctorName)
+                              : null,
+                          icon: const Icon(Icons.star, size: 18),
+                          label: const Text('Đánh giá'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  // THÊM: Hàm điều hướng sang màn hình đánh giá
+  void _navigateToFeedback(
+      int appointmentId, String appointmentCode, String doctorName) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FeedbackReviewScreen(
+          appointmentId: appointmentId,
+          appointmentCode: appointmentCode,
+          doctorName: doctorName,
+        ),
+      ),
+    );
+
+    // Nếu quay lại từ màn hình đánh giá và có cập nhật, reload danh sách
+    if (result == true) {
+      _loadAppointments();
+    }
   }
 
   // (Giữ nguyên các hàm _getStatusColor, _getStatusText, _getStatusIcon, _formatDate, _showAppointmentDetail, _buildDetailRow)
@@ -474,6 +523,32 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen>
               _buildDetailRow(
                   'Trạng thái', _getStatusText(appointment['status'])),
               const SizedBox(height: 20),
+              // THÊM NÚT ĐÁNH GIÁ TRONG DETAIL NẾU ĐÃ HOÀN THÀNH
+              if ((appointment['status'] ?? '').toString().toLowerCase() ==
+                  'completed')
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context); // Đóng detail sheet
+                        _navigateToFeedback(
+                            appointment['id']!,
+                            appointment['code'] ?? 'N/A',
+                            appointment['doctor_name'] ?? 'N/A');
+                      },
+                      icon: const Icon(Icons.star, size: 20),
+                      label: const Text('Gửi Đánh giá',
+                          style: TextStyle(fontSize: 16)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
