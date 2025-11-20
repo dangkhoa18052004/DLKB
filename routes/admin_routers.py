@@ -10,9 +10,7 @@ from sqlalchemy import func, extract
 
 admin_bp = Blueprint('admin', __name__)
 
-# =============================================
 # USER MANAGEMENT
-# =============================================
 
 @admin_bp.route('/users', methods=['GET'])
 @jwt_required()

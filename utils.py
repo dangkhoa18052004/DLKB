@@ -33,7 +33,6 @@ def log_activity(user_id, action, entity_type=None, entity_id=None, description=
             entity_type=entity_type, 
             entity_id=entity_id, 
             description=description,
-            # Tùy chọn: Thêm ip_address và user_agent từ request
         )
         db.session.add(log)
         db.session.commit()

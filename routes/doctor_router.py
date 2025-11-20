@@ -601,9 +601,7 @@ def get_my_leaves():
     
     return jsonify(results), 200
 
-# =============================================
 # FOLLOW-UP REMINDERS
-# =============================================
 
 @doctor_bp.route('/follow-up-reminders', methods=['POST'])
 @jwt_required()

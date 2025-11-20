@@ -10,14 +10,12 @@ booking_bp = Blueprint('booking', __name__)
 
 @booking_bp.route('/doctors/<int:doctor_id>/available-slots', methods=['GET'])
 def get_available_slots(doctor_id):
-    # ... (Giữ nguyên logic lấy slot từ app.py)
     target_date_str = request.args.get('date')
     if not target_date_str:
         return jsonify({"msg": "Missing 'date' parameter (YYYY-MM-DD)"}), 400
     
     try:
         target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
-        # Tính day_of_week theo schema PostgreSQL (0=CN, 1=T2...)
         day_of_week = target_date.weekday() + 1
         if day_of_week == 7: 
              day_of_week = 0 
@@ -29,13 +27,10 @@ def get_available_slots(doctor_id):
         day_of_week=day_of_week, 
         is_active=True
     ).all()
-    # ... (Toàn bộ logic tính toán slot trống tương tự app.py)
-    # ... (Do logic này dài và không thay đổi, tôi giữ nguyên như trong app.py)
-    
+
     if not schedules:
         return jsonify({"msg": "Doctor is not scheduled on this day"}), 404
 
-    # Lấy các lịch hẹn đã được xác nhận/chờ xử lý trong ngày đó
     booked_appointments = Appointment.query.filter(
         Appointment.doctor_id == doctor_id,
         Appointment.appointment_date == target_date,
@@ -73,7 +68,6 @@ def get_available_slots(doctor_id):
 @booking_bp.route('/appointments', methods=['POST'])
 @jwt_required()
 def create_appointment():
-    # ... (Giữ nguyên logic tạo lịch hẹn từ app.py)
     user_id = get_jwt_identity()
     patient_id = get_patient_id_from_user(user_id)
     
@@ -99,7 +93,6 @@ def create_appointment():
     if not doctor or not service:
          return jsonify({"msg": "Doctor or Service not found"}), 404
          
-    # Kiểm tra trùng lặp (Logic slot capacity được giả định là 1:1 cho mục đích này)
     existing_appointment = Appointment.query.filter(
         Appointment.doctor_id == doctor_id,
         Appointment.appointment_date == appointment_date,
@@ -141,7 +134,6 @@ def create_appointment():
 @booking_bp.route('/appointments/me', methods=['GET'])
 @jwt_required()
 def get_my_appointments():
-    # ... (Giữ nguyên logic lấy lịch hẹn của tôi từ app.py)
     user_id = get_jwt_identity()
     patient_id = get_patient_id_from_user(user_id)
     
@@ -152,7 +144,6 @@ def get_my_appointments():
     
     results = []
     for app in appointments:
-        # Lấy tên Bác sĩ thông qua mối quan hệ Doctor -> User
         doctor_name = app.doctor.user.full_name if app.doctor and app.doctor.user else 'N/A'
         
         results.append({
@@ -170,7 +161,6 @@ def get_my_appointments():
 @booking_bp.route('/appointments/<int:appointment_id>/cancel', methods=['PUT'])
 @jwt_required()
 def cancel_appointment(appointment_id):
-    # ... (Giữ nguyên logic hủy lịch từ app.py)
     user_id = get_jwt_identity()
     patient_id = get_patient_id_from_user(user_id)
     

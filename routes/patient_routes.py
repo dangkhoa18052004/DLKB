@@ -415,9 +415,7 @@ def get_payment_detail(payment_id):
     
     return jsonify(payment_data), 200
 
-# =============================================
 # REVIEWS
-# =============================================
 
 @patient_bp.route('/reviews/my', methods=['GET'])
 @jwt_required()
