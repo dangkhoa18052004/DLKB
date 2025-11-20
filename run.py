@@ -2,33 +2,80 @@ from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager
 from config import Config
 from models import SystemSetting, db, bcrypt
+# --- IMPORT TẤT CẢ CÁC BLUEPRINTS ---
 from routes.auth_routes import auth_bp
 from routes.public_routes import public_bp
 from routes.booking_routes import booking_bp
 from routes.general_routes import general_bp
+from routes.payment_router import payment_bp      # Đã thêm
+from routes.doctor_router import doctor_bp        # Đã thêm
+from routes.patient_routes import patient_bp      # Đã thêm
+from routes.admin_routers import admin_bp         # Đã thêm
+from routes.password_reset_routers import password_reset_bp # Đã thêm
+from routes.notification_routers import notification_bp # Đã thêm
+from routes.search_routers import search_bp       # Đã thêm
+from routes.stats_routers import stats_bp         # Đã thêm
 from utils import log_activity, generate_code, get_system_setting
 import click
 
 def create_app(config_class=Config):
-    app = Flask(__name__)
+    app = Flask(__name__) 
     app.config.from_object(config_class)
 
     db.init_app(app)
     bcrypt.init_app(app)
-    JWTManager(app)
+    jwt = JWTManager(app)
 
+    # JWT Error Handlers (Giữ nguyên)
+    @jwt.unauthorized_loader
+    def _unauthorized_callback(msg):
+        print(f"[JWT] Unauthorized: {msg}")
+        return jsonify({"msg": msg}), 401
+
+    @jwt.invalid_token_loader
+    def _invalid_token_callback(msg):
+        print(f"[JWT] Invalid token: {msg}")
+        return jsonify({"msg": msg}), 422
+
+    @jwt.expired_token_loader
+    def _expired_token_callback(header, payload):
+        print("[JWT] Token expired")
+        return jsonify({"msg": "Token has expired"}), 401
+
+    @jwt.revoked_token_loader
+    def _revoked_token_callback(payload):
+        print("[JWT] Token revoked")
+        return jsonify({"msg": "Token has been revoked"}), 401
+
+    # --- ĐĂNG KÝ TẤT CẢ CÁC BLUEPRINTS (Đã xóa /v1) ---
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(public_bp, url_prefix='/api/public')
     app.register_blueprint(booking_bp, url_prefix='/api/booking')
     app.register_blueprint(general_bp, url_prefix='/api/general')
+
+    # Patient, Doctor, Admin Routes
+    app.register_blueprint(patient_bp, url_prefix='/api/patient')
+    app.register_blueprint(doctor_bp, url_prefix='/api/doctor')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
+
+    # Utility & Transaction Routes
+    app.register_blueprint(payment_bp, url_prefix='/api/payment')
+    app.register_blueprint(password_reset_bp, url_prefix='/api/auth/reset')
+    app.register_blueprint(notification_bp, url_prefix='/api/notifications')
+    app.register_blueprint(search_bp, url_prefix='/api/search')
+    app.register_blueprint(stats_bp, url_prefix='/api/stats')
+    # ---------------------------------------------------
     
+    # 4. ĐỊNH NGHĨA LỆNH CLI
     @app.cli.command("init-db")
     def init_db():
         """Tạo các bảng CSDL và chèn dữ liệu mẫu nếu cần"""
         with app.app_context():
             try:
                 db.create_all()
+                
                 if not get_system_setting('hospital_name'):
+                    from models import SystemSetting 
                     db.session.add_all([
                         SystemSetting(key='hospital_name', value='Bệnh viện Nhi Đồng II TP.HCM', description='Tên bệnh viện'),
                         SystemSetting(key='appointment_buffer_minutes', value='15', description='Khoảng cách giữa các lịch hẹn (phút)', data_type='integer'),
@@ -46,4 +93,4 @@ def create_app(config_class=Config):
 app = create_app()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)

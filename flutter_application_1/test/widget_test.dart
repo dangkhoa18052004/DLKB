@@ -4,7 +4,7 @@ import 'package:hospital_admin_app/main.dart';
 
 void main() {
   testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(const HospitalBookingApp());
 
     expect(find.text('0'), findsOneWidget);
     expect(find.text('1'), findsNothing);

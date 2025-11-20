@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, redirect
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Payment, PaymentItem, Appointment, Service, Patient
+from models import db, Payment, PaymentItem, Appointment, Service, Patient, User
 from utils import log_activity, generate_code, get_patient_id_from_user
 from datetime import datetime
 import hashlib
@@ -8,22 +8,27 @@ import hmac
 import json
 import requests
 import uuid
+import traceback 
 
 payment_bp = Blueprint('payment', __name__)
 
-# MOMO CONFIGURATION (SANDBOX)
+HOST_IP = '192.168.100.151' 
+FRONTEND_URL = f'http://{HOST_IP}:3000' 
 
 MOMO_CONFIG = {
     'partner_code': 'MOMOBKUN20180529',
     'access_key': 'klm05TvNBzhg7h7j',
     'secret_key': 'at67qH6mk8w5Y1nAyMoYKMWACiEi2bsa',
-    'endpoint': 'https://test-payment.momo.vn/v2/gateway/api/create',
-    'redirect_url': 'http://localhost:5000/api/v1/payment/momo/callback',
-    'ipn_url': 'http://localhost:5000/api/v1/payment/momo/ipn',
+    'endpoint': 'https://test-payment.momo.vn/gateway/api/create',
+    'redirect_url': f'http://{HOST_IP}:5000/api/payment/momo/callback',
+    'ipn_url': f'http://{HOST_IP}:5000/api/payment/momo/ipn',
     'request_type': 'payWithATM'  
 }
 
-# CREATE PAYMENT
+def generate_momo_signature(raw_signature, secret_key):
+    """Tạo HMAC SHA256 signature cho MoMo"""
+    h = hmac.new(secret_key.encode(), raw_signature.encode(), hashlib.sha256)
+    return h.hexdigest()
 
 @payment_bp.route('/create', methods=['POST'])
 @jwt_required()
@@ -41,25 +46,20 @@ def create_payment():
     if not appointment_id:
         return jsonify({"msg": "appointment_id is required"}), 400
     
-    # Kiểm tra appointment có thuộc patient này không
     appointment = Appointment.query.filter_by(id=appointment_id, patient_id=patient_id).first()
     
     if not appointment:
         return jsonify({"msg": "Appointment not found"}), 404
     
-    # Kiểm tra đã có payment chưa
     existing_payment = Payment.query.filter_by(appointment_id=appointment_id).first()
     if existing_payment and existing_payment.payment_status in ['completed', 'processing']:
         return jsonify({"msg": "Payment already exists for this appointment"}), 409
     
-    # Lấy service để tính tổng tiền
     service = Service.query.get(appointment.service_id)
     if not service:
         return jsonify({"msg": "Service not found"}), 404
     
     total_amount = float(service.price)
-    
-    # Tạo payment record
     payment_code = generate_code(prefix='PAY', length=10)
     
     new_payment = Payment(
@@ -76,7 +76,7 @@ def create_payment():
         db.session.add(new_payment)
         db.session.flush()
         
-        # Tạo payment items
+        from models import PaymentItem 
         payment_item = PaymentItem(
             payment_id=new_payment.id,
             service_id=service.id,
@@ -102,15 +102,8 @@ def create_payment():
         db.session.rollback()
         return jsonify({"msg": f"Error creating payment: {str(e)}"}), 500
 
-# =============================================
+
 # MOMO PAYMENT INTEGRATION
-# =============================================
-
-def generate_momo_signature(raw_signature, secret_key):
-    """Tạo HMAC SHA256 signature cho MoMo"""
-    h = hmac.new(secret_key.encode(), raw_signature.encode(), hashlib.sha256)
-    return h.hexdigest()
-
 @payment_bp.route('/momo/create', methods=['POST'])
 @jwt_required()
 def create_momo_payment():
@@ -124,28 +117,28 @@ def create_momo_payment():
     if not payment_id:
         return jsonify({"msg": "payment_id is required"}), 400
     
-    # Lấy thông tin payment
     payment = Payment.query.filter_by(id=payment_id, patient_id=patient_id).first()
     
     if not payment:
         return jsonify({"msg": "Payment not found"}), 404
     
+    if payment.payment_status in ['completed', 'processing']:
+         return jsonify({"msg": f"Payment already exists and is {payment.payment_status}"}), 409
+
     if payment.payment_status != 'pending':
         return jsonify({"msg": f"Payment status is {payment.payment_status}, cannot process"}), 400
     
-    # Chuẩn bị dữ liệu cho MoMo
     order_id = payment.payment_code
-    amount = str(int(float(payment.amount)))
+    try:
+        amount = str(int(float(payment.amount)))
+    except ValueError:
+        return jsonify({"msg": f"Invalid amount value: {payment.amount}"}), 400
+        
     order_info = payment.description
     request_id = str(uuid.uuid4())
     
-    # Tạo raw signature
-    raw_signature = f"accessKey={MOMO_CONFIG['access_key']}&amount={amount}&extraData=&ipnUrl={MOMO_CONFIG['ipn_url']}&orderId={order_id}&orderInfo={order_info}&partnerCode={MOMO_CONFIG['partner_code']}&redirectUrl={MOMO_CONFIG['redirect_url']}&requestId={request_id}&requestType={MOMO_CONFIG['request_type']}"
-    
-    signature = generate_momo_signature(raw_signature, MOMO_CONFIG['secret_key'])
-    
-    # Dữ liệu gửi đến MoMo
-    momo_data = {
+    # 1. TẠO DICT CHỨA TẤT CẢ THAM SỐ GỐC
+    params = {
         'partnerCode': MOMO_CONFIG['partner_code'],
         'accessKey': MOMO_CONFIG['access_key'],
         'requestId': request_id,
@@ -154,25 +147,54 @@ def create_momo_payment():
         'orderInfo': order_info,
         'redirectUrl': MOMO_CONFIG['redirect_url'],
         'ipnUrl': MOMO_CONFIG['ipn_url'],
-        'extraData': '',
+        'extraData': '', 
         'requestType': MOMO_CONFIG['request_type'],
-        'signature': signature,
         'lang': 'vi'
     }
     
+    # 2. TẠO CHUỖI RAW SIGNATURE THEO THỨ TỰ CỦA MOMO (accessKey, amount, extraData, ...)
+    # SỬ DỤNG LIST CÁC KEY THEO ĐÚNG THỨ TỰ BẢNG CHỮ CÁI ĐỂ KHẮC PHỤC LỖI 403
+    
+    MOMO_SIGNATURE_KEYS = [
+        'accessKey', 'amount', 'extraData', 'ipnUrl', 'orderId', 'orderInfo', 
+        'partnerCode', 'redirectUrl', 'requestId', 'requestType'
+    ]
+    
+    # TẠO CHUỖI CHỮ KÝ RAW_SIGNATURE
+    raw_signature_parts = []
+    for key in MOMO_SIGNATURE_KEYS:
+        # Lấy giá trị, sử dụng giá trị từ dict params
+        value = params.get(key)
+        # Chỉ thêm nếu key không phải là 'signature' (đã kiểm tra)
+        raw_signature_parts.append(f"{key}={value}") 
+        
+    raw_signature = "&".join(raw_signature_parts)
+    
+    signature = generate_momo_signature(raw_signature, MOMO_CONFIG['secret_key'])
+    
+    momo_data = params
+    momo_data['signature'] = signature
+    
     try:
-        # Gửi request đến MoMo
         response = requests.post(
             MOMO_CONFIG['endpoint'],
             json=momo_data,
             headers={'Content-Type': 'application/json'},
-            timeout=10
+            timeout=10,
+            verify=False 
         )
         
-        result = response.json()
-        
+        # KIỂM TRA RESPONSE
+        if response.status_code == 200:
+            result = response.json()
+        else:
+            return jsonify({
+                "msg": f"MoMo API returned status {response.status_code} ({response.reason})",
+                "detail": response.text[:100]
+            }), 400
+
+        # XỬ LÝ KẾT QUẢ
         if result.get('resultCode') == 0:
-            # Cập nhật payment status
             payment.payment_status = 'processing'
             payment.transaction_id = request_id
             db.session.commit()
@@ -188,21 +210,33 @@ def create_momo_payment():
                 "request_id": request_id
             }), 200
         else:
+            # Lỗi logic MoMo (ví dụ: tham số sai, mã code sai)
             return jsonify({
-                "msg": "Failed to initiate MoMo payment",
+                "msg": "Failed to initiate MoMo payment (MoMo Logic Error)",
                 "error": result.get('message'),
                 "result_code": result.get('resultCode')
             }), 400
             
     except requests.exceptions.RequestException as e:
-        return jsonify({"msg": f"Error connecting to MoMo: {str(e)}"}), 500
+        error_msg = f"Network Error: Could not connect to MoMo. Details: {str(e)}"
+        print(f"[ERROR] MoMo Init Failed: {error_msg}")
+        traceback.print_exc() 
+        return jsonify({"msg": error_msg}), 500
+    except json.JSONDecodeError as e:
+        error_msg = f"MoMo returned non-JSON data. Details: {str(e)} Response: {response.text[:500]}"
+        print(f"[ERROR] MoMo JSON Decode Failed: {error_msg}")
+        return jsonify({"msg": error_msg}), 500
     except Exception as e:
-        return jsonify({"msg": f"Error processing MoMo payment: {str(e)}"}), 500
+        db.session.rollback()
+        print("[CRITICAL PYTHON ERROR] MoMo Init Crash:")
+        traceback.print_exc() 
+        return jsonify({"msg": f"Internal Server Crash: {type(e).__name__}"}), 500
+
+# [Giữ nguyên các routes callback, ipn và check-status]
 
 @payment_bp.route('/momo/callback', methods=['GET'])
 def momo_payment_callback():
     """Xử lý callback từ MoMo sau khi thanh toán"""
-    # Lấy parameters từ MoMo
     partner_code = request.args.get('partnerCode')
     order_id = request.args.get('orderId')
     request_id = request.args.get('requestId')
@@ -217,27 +251,50 @@ def momo_payment_callback():
     extra_data = request.args.get('extraData')
     signature = request.args.get('signature')
     
-    # Tìm payment
     payment = Payment.query.filter_by(payment_code=order_id).first()
     
+    FRONTEND_URL = f'http://{HOST_IP}:3000' 
+
     if not payment:
-        return redirect(f'http://localhost:3000/payment/failed?msg=Payment not found')
+        return redirect(f'{FRONTEND_URL}/payment/failed?msg=Payment not found')
     
     # Verify signature
-    raw_signature = f"accessKey={MOMO_CONFIG['access_key']}&amount={amount}&extraData={extra_data}&message={message}&orderId={order_id}&orderInfo={order_info}&orderType={order_type}&partnerCode={partner_code}&payType={pay_type}&requestId={request_id}&responseTime={response_time}&resultCode={result_code}&transId={trans_id}"
+    # Cần hardcode thứ tự tham số cho verify signature
+    VERIFY_SIGNATURE_KEYS = [
+        'accessKey', 'amount', 'extraData', 'message', 'orderId', 'orderInfo', 
+        'orderType', 'partnerCode', 'payType', 'requestId', 'responseTime', 
+        'resultCode', 'transId'
+    ]
     
+    raw_signature_data = {
+        'accessKey': MOMO_CONFIG['access_key'],
+        'amount': amount,
+        'extraData': extra_data or '',
+        'message': message,
+        'orderId': order_id,
+        'orderInfo': order_info,
+        'orderType': order_type,
+        'partnerCode': partner_code,
+        'payType': pay_type,
+        'requestId': request_id,
+        'responseTime': response_time,
+        'resultCode': result_code,
+        'transId': trans_id
+    }
+    
+    raw_signature_parts = [f"{key}={raw_signature_data[key]}" for key in VERIFY_SIGNATURE_KEYS]
+    raw_signature = "&".join(raw_signature_parts)
+
     expected_signature = generate_momo_signature(raw_signature, MOMO_CONFIG['secret_key'])
     
     if signature != expected_signature:
-        return redirect(f'http://localhost:3000/payment/failed?msg=Invalid signature')
+        return redirect(f'{FRONTEND_URL}/payment/failed?msg=Invalid signature')
     
-    # Cập nhật payment status
     if result_code == '0':
         payment.payment_status = 'completed'
         payment.payment_date = datetime.utcnow()
         payment.transaction_id = trans_id
         
-        # Cập nhật appointment status thành confirmed
         if payment.appointment_id:
             appointment = Appointment.query.get(payment.appointment_id)
             if appointment and appointment.status == 'pending':
@@ -245,12 +302,12 @@ def momo_payment_callback():
         
         db.session.commit()
         
-        return redirect(f'http://localhost:3000/payment/success?payment_code={order_id}&trans_id={trans_id}')
+        return redirect(f'{FRONTEND_URL}/payment/success?payment_code={order_id}&trans_id={trans_id}')
     else:
         payment.payment_status = 'failed'
         db.session.commit()
         
-        return redirect(f'http://localhost:3000/payment/failed?msg={message}&code={result_code}')
+        return redirect(f'{FRONTEND_URL}/payment/failed?msg={message}&code={result_code}')
 
 @payment_bp.route('/momo/ipn', methods=['POST'])
 def momo_payment_ipn():
@@ -272,7 +329,31 @@ def momo_payment_ipn():
     signature = data.get('signature')
     
     # Verify signature
-    raw_signature = f"accessKey={MOMO_CONFIG['access_key']}&amount={amount}&extraData={extra_data}&message={message}&orderId={order_id}&orderInfo={order_info}&orderType={order_type}&partnerCode={partner_code}&payType={pay_type}&requestId={request_id}&responseTime={response_time}&resultCode={result_code}&transId={trans_id}"
+    # Cần hardcode thứ tự tham số cho verify signature
+    VERIFY_SIGNATURE_KEYS = [
+        'accessKey', 'amount', 'extraData', 'message', 'orderId', 'orderInfo', 
+        'orderType', 'partnerCode', 'payType', 'requestId', 'responseTime', 
+        'resultCode', 'transId'
+    ]
+    
+    raw_signature_data = {
+        'accessKey': MOMO_CONFIG['access_key'],
+        'amount': amount,
+        'extraData': extra_data or '',
+        'message': message,
+        'orderId': order_id,
+        'orderInfo': order_info,
+        'orderType': order_type,
+        'partnerCode': partner_code,
+        'payType': pay_type,
+        'requestId': request_id,
+        'responseTime': response_time,
+        'resultCode': result_code,
+        'transId': trans_id
+    }
+    
+    raw_signature_parts = [f"{key}={raw_signature_data[key]}" for key in VERIFY_SIGNATURE_KEYS]
+    raw_signature = "&".join(raw_signature_parts)
     
     expected_signature = generate_momo_signature(raw_signature, MOMO_CONFIG['secret_key'])
     
@@ -306,10 +387,6 @@ def momo_payment_ipn():
         
         return jsonify({"resultCode": result_code, "message": message}), 200
 
-# =============================================
-# PAYMENT STATUS CHECK
-# =============================================
-
 @payment_bp.route('/check-status/<string:payment_code>', methods=['GET'])
 @jwt_required()
 def check_payment_status(payment_code):
@@ -331,100 +408,3 @@ def check_payment_status(payment_code):
         "payment_date": payment.payment_date.strftime('%Y-%m-%d %H:%M:%S') if payment.payment_date else None,
         "created_at": payment.created_at.strftime('%Y-%m-%d %H:%M:%S')
     }), 200
-
-# =============================================
-# QUERY MOMO TRANSACTION STATUS
-# =============================================
-
-@payment_bp.route('/momo/query', methods=['POST'])
-@jwt_required()
-def query_momo_transaction():
-    """Truy vấn trạng thái giao dịch MoMo"""
-    user_id = get_jwt_identity()
-    data = request.get_json()
-    
-    order_id = data.get('order_id')
-    request_id = data.get('request_id')
-    
-    if not order_id:
-        return jsonify({"msg": "order_id is required"}), 400
-    
-    # Tạo signature
-    raw_signature = f"accessKey={MOMO_CONFIG['access_key']}&orderId={order_id}&partnerCode={MOMO_CONFIG['partner_code']}&requestId={request_id or str(uuid.uuid4())}"
-    signature = generate_momo_signature(raw_signature, MOMO_CONFIG['secret_key'])
-    
-    query_data = {
-        'partnerCode': MOMO_CONFIG['partner_code'],
-        'accessKey': MOMO_CONFIG['access_key'],
-        'requestId': request_id or str(uuid.uuid4()),
-        'orderId': order_id,
-        'signature': signature,
-        'lang': 'vi'
-    }
-    
-    try:
-        response = requests.post(
-            'https://test-payment.momo.vn/v2/gateway/api/query',
-            json=query_data,
-            headers={'Content-Type': 'application/json'},
-            timeout=10
-        )
-        
-        result = response.json()
-        
-        # Cập nhật local payment status nếu cần
-        if result.get('resultCode') == 0:
-            payment = Payment.query.filter_by(payment_code=order_id).first()
-            if payment:
-                if result.get('message') == 'Giao dịch thành công.':
-                    payment.payment_status = 'completed'
-                    payment.payment_date = datetime.utcnow()
-                    db.session.commit()
-        
-        return jsonify(result), 200
-        
-    except Exception as e:
-        return jsonify({"msg": f"Error querying MoMo: {str(e)}"}), 500
-
-# =============================================
-# REFUND (FOR ADMIN)
-# =============================================
-
-@payment_bp.route('/refund/<int:payment_id>', methods=['POST'])
-@jwt_required()
-def refund_payment(payment_id):
-    """Hoàn tiền (chỉ admin)"""
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    
-    if user.role != 'admin':
-        return jsonify({"msg": "Admin access required"}), 403
-    
-    payment = Payment.query.get_or_404(payment_id)
-    
-    if payment.payment_status != 'completed':
-        return jsonify({"msg": "Can only refund completed payments"}), 400
-    
-    data = request.get_json()
-    
-    payment.payment_status = 'refunded'
-    payment.refund_reason = data.get('reason', 'Refunded by admin')
-    payment.refunded_at = datetime.utcnow()
-    
-    # Cập nhật appointment status về pending nếu cần
-    if payment.appointment_id:
-        appointment = Appointment.query.get(payment.appointment_id)
-        if appointment:
-            appointment.status = 'pending'
-    
-    try:
-        db.session.commit()
-        log_activity(user_id, "REFUND_PAYMENT", "payment", payment.id, 
-                    f"Refunded payment: {payment.payment_code}")
-        return jsonify({"msg": "Payment refunded successfully"}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"msg": f"Error refunding payment: {str(e)}"}), 500
-
-# Import User model ở đầu file nếu chưa có
-from models import User

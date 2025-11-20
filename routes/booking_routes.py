@@ -68,20 +68,37 @@ def get_available_slots(doctor_id):
 @booking_bp.route('/appointments', methods=['POST'])
 @jwt_required()
 def create_appointment():
+    # Debug: log incoming request headers and raw body to help trace 422 errors
+    try:
+        raw = request.get_data(cache=True)
+        print(f"[BOOKING] Request headers: {dict(request.headers)}")
+        print(f"[BOOKING] Raw body: {raw.decode('utf-8', errors='replace')}")
+    except Exception as _:
+        print("[BOOKING] Failed to read request body for debugging")
+
     user_id = get_jwt_identity()
     patient_id = get_patient_id_from_user(user_id)
     
     if not patient_id:
         return jsonify({"msg": "User role is not patient or patient data missing"}), 403
 
-    data = request.get_json()
+    # Lấy dữ liệu an toàn hơn, tránh lỗi serialization/middleware
     try:
+        data = request.get_json(silent=True) # Dùng silent=True để tránh lỗi parser
+        if not data:
+             return jsonify({"msg": "Invalid or empty JSON data received"}), 400
+             
         doctor_id = data['doctor_id']
         service_id = data['service_id']
         appointment_date = datetime.strptime(data['appointment_date'], '%Y-%m-%d').date()
         appointment_time = datetime.strptime(data['appointment_time'], '%H:%M').time()
-    except (KeyError, ValueError):
-        return jsonify({"msg": "Invalid or missing required appointment data"}), 400
+    except (KeyError, ValueError) as e:
+        # Trả lỗi chi tiết hơn nếu thiếu trường bắt buộc
+        return jsonify({"msg": f"Missing or invalid data field: {e}"}), 400
+    except Exception as e:
+         # Lỗi không rõ nguyên nhân, có thể do JSON bị hỏng
+         return jsonify({"msg": f"Critical error parsing JSON: {str(e)}"}), 400
+
 
     now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
     appointment_dt_utc = datetime.combine(appointment_date, appointment_time).replace(tzinfo=pytz.utc)

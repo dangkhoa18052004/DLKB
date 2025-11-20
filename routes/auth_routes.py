@@ -57,8 +57,9 @@ def login():
     ).first()
 
     if user and user.check_password(password) and user.is_active:
+        # Use string identity to ensure JWT 'sub' is a string (avoid PyJWT Subject type errors)
         access_token = create_access_token(
-            identity=user.id, 
+            identity=str(user.id),
             additional_claims={'role': user.role}
         )
         user.last_login = datetime.utcnow()
