@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import (db, User, Patient, Appointment, MedicalRecord, 
                      Prescription, Payment, Review)
@@ -8,9 +8,6 @@ from sqlalchemy.exc import IntegrityError
 
 patient_bp = Blueprint('patient', __name__)
 
-# =============================================
-# PROFILE MANAGEMENT
-# =============================================
 
 @patient_bp.route('/profile', methods=['GET'])
 @jwt_required()
@@ -57,6 +54,7 @@ def get_my_profile():
 def update_my_profile():
     """Cập nhật thông tin profile"""
     user_id = get_jwt_identity()
+    current_app.logger.debug("UpdateProfile request for user_id=%s payload=%s", user_id, request.json)
     user = User.query.get_or_404(user_id)
     patient = Patient.query.filter_by(user_id=user_id).first()
     
@@ -72,7 +70,29 @@ def update_my_profile():
     if 'date_of_birth' in data:
         user.date_of_birth = datetime.strptime(data['date_of_birth'], '%Y-%m-%d').date()
     if 'gender' in data:
-        user.gender = data['gender']
+        # Normalize incoming gender to match DB CHECK constraint values: 'Nam','Nữ','Khác'
+        raw_gender = data.get('gender')
+        if isinstance(raw_gender, str):
+            g = raw_gender.strip().lower()
+            if g in ('male', 'm', 'nam', 'man'):
+                user.gender = 'Nam'
+            elif g in ('female', 'f', 'nu', 'nữ', 'woman'):
+                user.gender = 'Nữ'
+            elif g in ('other', 'khac', 'khác'):
+                user.gender = 'Khác'
+            else:
+                # Unknown string: try to map common Vietnamese spellings, else title-case
+                if 'nam' in g:
+                    user.gender = 'Nam'
+                elif 'nữ' in g or 'nu' in g:
+                    user.gender = 'Nữ'
+                elif 'kh' in g or 'khác' in g or 'khac' in g:
+                    user.gender = 'Khác'
+                else:
+                    user.gender = raw_gender.strip().title()
+        else:
+            # non-string values: store as-is (will likely fail DB constraints)
+            user.gender = raw_gender
     if 'address' in data:
         user.address = data['address']
     if 'avatar_url' in data:
@@ -95,13 +115,31 @@ def update_my_profile():
         if 'insurance_provider' in data:
             patient.insurance_provider = data['insurance_provider']
     
+    # Kiểm tra trùng email / phone (loại trừ chính user hiện tại) trước khi commit
+    new_email = data.get('email', user.email)
+    new_phone = data.get('phone', user.phone)
+
+    conflict = User.query.filter(
+        ((User.email == new_email) | (User.phone == new_phone)),
+        User.id != user_id
+    ).first()
+
+    if conflict:
+        if conflict.email == new_email:
+            return jsonify({"msg": "Email already exists"}), 409
+        if conflict.phone == new_phone:
+            return jsonify({"msg": "Phone already exists"}), 409
+        return jsonify({"msg": "Email or Phone already exists"}), 409
+
     try:
         db.session.commit()
         log_activity(user_id, "UPDATE_PROFILE", "patient", patient.id if patient else None, "Updated patient profile")
         return jsonify({"msg": "Profile updated successfully"}), 200
-    except IntegrityError:
+    except IntegrityError as ie:
         db.session.rollback()
-        return jsonify({"msg": "Email or Phone already exists"}), 409
+        current_app.logger.exception("IntegrityError when updating profile for user_id=%s", user_id)
+        # Return the DB error message to aid debugging (trim/format as needed)
+        return jsonify({"msg": f"Integrity error: {str(ie.orig) if hasattr(ie, 'orig') else str(ie)}"}), 409
     except Exception as e:
         db.session.rollback()
         return jsonify({"msg": f"Error updating profile: {str(e)}"}), 500

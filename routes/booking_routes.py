@@ -169,6 +169,7 @@ def get_my_appointments():
             'date': app.appointment_date.strftime('%Y-%m-%d'),
             'time': app.appointment_time.strftime('%H:%M'),
             'status': app.status,
+            'doctor_id': app.doctor_id,
             'doctor_name': doctor_name,
             'department_id': app.department_id
         })

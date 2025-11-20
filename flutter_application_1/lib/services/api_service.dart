@@ -1,7 +1,5 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-// Thay thế 'package:flutter_secure_storage/flutter_secure_storage.dart' bằng 'package:shared_preferences/shared_preferences.dart'
-// vì flutter_secure_storage không được phép sử dụng trong môi trường sandbox.
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
@@ -9,7 +7,6 @@ class ApiService {
   // Sử dụng IP VÀ CỔNG CỦA MÁY TÍNH WINDOWS
   static const String baseUrl = 'http://192.168.100.151:5000/api';
 
-  // Thay đổi storage mechanism
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token');
@@ -84,6 +81,24 @@ class ApiService {
     }
   }
 
+  // Get services
+  Future<Map<String, dynamic>> getServices() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/public/services'),
+        headers: await getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        return {'success': false, 'error': 'Failed to load services'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
   // Get doctors by department
   Future<Map<String, dynamic>> getDoctors({int? departmentId}) async {
     try {
@@ -148,8 +163,7 @@ class ApiService {
         final body = jsonDecode(response.body);
         final msg = body['msg'] ?? 'Booking failed';
 
-        // If server returns an invalid-token error (migration from old tokens),
-        // clear stored token so the app forces a login and obtains a new token.
+        // Xử lý lỗi token hết hạn
         if (response.statusCode == 422 ||
             msg.toString().toLowerCase().contains('subject must be a string') ||
             msg.toString().toLowerCase().contains('invalid token') ||
@@ -162,6 +176,215 @@ class ApiService {
         }
 
         return {'success': false, 'error': msg};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // Cancel appointment
+  Future<Map<String, dynamic>> cancelAppointment(
+      int appointmentId, String reason) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/booking/appointments/$appointmentId/cancel'),
+        headers: await getHeaders(),
+        body: jsonEncode({'reason': reason}),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        final body = jsonDecode(response.body);
+        return {'success': false, 'error': body['msg'] ?? 'Hủy lịch thất bại'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // Reschedule appointment
+  Future<Map<String, dynamic>> rescheduleAppointment(
+      int appointmentId, String newDate, String newTime) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/patient/appointments/$appointmentId/reschedule'),
+        headers: await getHeaders(),
+        body: jsonEncode({
+          'new_date': newDate,
+          'new_time': newTime,
+          'reason': 'Rescheduled by patient via app'
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        final body = jsonDecode(response.body);
+        return {'success': false, 'error': body['msg'] ?? 'Đổi lịch thất bại'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // Get my appointments
+  Future<Map<String, dynamic>> getMyAppointments() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/booking/appointments/me'),
+        headers: await getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        return {'success': false, 'error': jsonDecode(response.body)['msg']};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // Get my medical records
+  Future<Map<String, dynamic>> getMedicalRecords() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/patient/medical-records'),
+        headers: await getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'data': jsonDecode(response.body)['medical_records']
+        };
+      } else {
+        return {'success': false, 'error': jsonDecode(response.body)['msg']};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // Get my profile
+  Future<Map<String, dynamic>> getMyProfile() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/patient/profile'),
+        headers: await getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        return {'success': false, 'error': jsonDecode(response.body)['msg']};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // Get my notifications
+  Future<Map<String, dynamic>> getMyNotifications(
+      {int page = 1, int perPage = 20, bool unreadOnly = false}) async {
+    try {
+      final url = Uri.parse(
+          '$baseUrl/notifications/my-notifications?page=$page&per_page=$perPage&unread_only=${unreadOnly ? 'true' : 'false'}');
+      final response = await http.get(url, headers: await getHeaders());
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        final body = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': body['msg'] ?? 'Failed to load notifications'
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> markNotificationAsRead(
+      int notificationId) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/notifications/$notificationId/read'),
+        headers: await getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        final body = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': body['msg'] ?? 'Failed to mark read'
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteNotification(int notificationId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/notifications/$notificationId'),
+        headers: await getHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        final body = jsonDecode(response.body);
+        return {'success': false, 'error': body['msg'] ?? 'Failed to delete'};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // Update my profile
+  Future<Map<String, dynamic>> updateMyProfile(
+      Map<String, dynamic> data) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/patient/profile'),
+        headers: await getHeaders(),
+        body: jsonEncode(data),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        return {'success': false, 'error': jsonDecode(response.body)['msg']};
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Connection error: $e'};
+    }
+  }
+
+  // Change password
+  Future<Map<String, dynamic>> changePassword(String currentPassword,
+      String newPassword, String confirmPassword) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/patient/change-password'),
+        headers: await getHeaders(),
+        body: jsonEncode({
+          'current_password': currentPassword,
+          'new_password': newPassword,
+          'confirm_password': confirmPassword
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      } else {
+        return {'success': false, 'error': jsonDecode(response.body)['msg']};
       }
     } catch (e) {
       return {'success': false, 'error': 'Connection error: $e'};

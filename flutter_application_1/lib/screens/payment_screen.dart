@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:qr_flutter/qr_flutter.dart'; // ← THÊM IMPORT
-import '../../services/api_service.dart';
+import '../services/api_service.dart';
 import 'home_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -26,8 +26,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   String? _paymentCode;
   bool _isProcessing = false;
   String? _errorMessage;
-  String? _qrCodeUrl; // ← THÊM BIẾN LƯU QR CODE
-  String? _paymentUrl; // ← THÊM BIẾN LƯU PAYMENT URL
+  // QR/payment URL fields are handled locally when showing dialog; no saved fields needed
 
   @override
   void initState() {
@@ -84,10 +83,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final payUrl = result['data']['payment_url'];
       final qrUrl = result['data']['qr_code_url'];
 
-      setState(() {
-        _paymentUrl = payUrl;
-        _qrCodeUrl = qrUrl;
-      });
+      // don't persist these in fields; show dialog immediately
 
       // ✅ HIỂN thị QR CODE DIALOG
       if (mounted) {
