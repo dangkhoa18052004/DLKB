@@ -16,7 +16,7 @@ payment_bp = Blueprint('payment', __name__)
 HOST_IP = '192.168.100.151' 
 FRONTEND_URL = f'http://{HOST_IP}:3000' 
 
-NGROK_URL = 'https://abc123xyz.ngrok-free.app'
+NGROK_URL = 'https://anika-unfinical-kala.ngrok-free.dev'  
 
 MOMO_CONFIG = {
     'partner_code': 'MOMO',
@@ -33,7 +33,92 @@ def generate_momo_signature(raw_signature, secret_key):
     h = hmac.new(bytes(secret_key, 'utf-8'), bytes(raw_signature, 'utf-8'), hashlib.sha256)
     return h.hexdigest()
 
-# ... (giữ nguyên các hàm create_payment)
+
+@payment_bp.route('/create', methods=['POST'])
+@jwt_required()
+def create_payment_record():
+    """Tạo payment record ban đầu với status pending"""
+    user_id = get_jwt_identity()
+    patient_id = get_patient_id_from_user(user_id)
+    
+    data = request.get_json()
+    appointment_id = data.get('appointment_id')
+    amount = data.get('amount')
+    provider = data.get('provider', 'momo')
+    
+    print(f"[CREATE PAYMENT] User: {user_id}, Patient: {patient_id}")
+    print(f"[CREATE PAYMENT] Appointment: {appointment_id}, Amount: {amount}")
+    
+    if not appointment_id or not amount:
+        return jsonify({"msg": "appointment_id and amount are required"}), 400
+    
+    # Kiểm tra appointment tồn tại và thuộc về patient
+    appointment = Appointment.query.filter_by(
+        id=appointment_id, 
+        patient_id=patient_id
+    ).first()
+    
+    if not appointment:
+        return jsonify({"msg": "Appointment not found or access denied"}), 404
+    
+    # Kiểm tra xem đã có payment cho appointment này chưa
+    existing_payment = Payment.query.filter_by(appointment_id=appointment_id).first()
+    
+    if existing_payment:
+        print(f"[CREATE PAYMENT] Found existing payment: {existing_payment.payment_code}, Status: {existing_payment.payment_status}")
+        
+        if existing_payment.payment_status == 'completed':
+            return jsonify({"msg": "Payment already completed"}), 400
+        elif existing_payment.payment_status == 'processing':
+            # Trả về payment hiện tại nếu đang processing
+            return jsonify({
+                "payment_id": existing_payment.id,
+                "payment_code": existing_payment.payment_code,
+                "amount": str(existing_payment.amount),
+                "status": existing_payment.payment_status
+            }), 200
+        else:
+            # Nếu payment cũ failed/pending, xóa và tạo mới
+            print(f"[CREATE PAYMENT] Deleting old payment: {existing_payment.payment_code}")
+            db.session.delete(existing_payment)
+            db.session.commit()
+    
+    # Tạo payment record mới
+    payment_code = generate_code('PAY')
+    
+    payment = Payment(
+        payment_code=payment_code,
+        appointment_id=appointment_id,
+        patient_id=patient_id,
+        amount=amount,
+        payment_method=provider,
+        payment_status='pending',
+        description=f'Thanh toán khám bệnh - {appointment.appointment_code}'
+    )
+    
+    try:
+        # ✅ Chỉ tạo Payment, bỏ qua PaymentItem vì model không khớp
+        db.session.add(payment)
+        db.session.commit()
+        
+        print(f"[CREATE PAYMENT] ✅ Created payment: {payment_code} (ID: {payment.id})")
+        
+        log_activity(user_id, "CREATE_PAYMENT", "payment", payment.id, 
+                    f"Created payment record {payment_code}")
+        
+        return jsonify({
+            "payment_id": payment.id,
+            "payment_code": payment.payment_code,
+            "amount": str(payment.amount),
+            "status": payment.payment_status
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ERROR] Failed to create payment: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"msg": f"Failed to create payment: {str(e)}"}), 500
+
 
 @payment_bp.route('/momo/create', methods=['POST'])
 @jwt_required()
@@ -70,21 +155,22 @@ def create_momo_payment():
         "accessKey=" + MOMO_CONFIG['access_key'] + 
         "&amount=" + amount + 
         "&extraData=" + extra_data + 
-        "&ipnUrl=" + MOMO_CONFIG['ipn_url'] +  # ← Ngrok URL
+        "&ipnUrl=" + MOMO_CONFIG['ipn_url'] +
         "&orderId=" + order_id + 
         "&orderInfo=" + order_info + 
         "&partnerCode=" + MOMO_CONFIG['partner_code'] + 
-        "&redirectUrl=" + MOMO_CONFIG['redirect_url'] +  # ← Ngrok URL
+        "&redirectUrl=" + MOMO_CONFIG['redirect_url'] +
         "&requestId=" + request_id + 
         "&requestType=" + MOMO_CONFIG['request_type']
     )
     
-    print("--------------------RAW SIGNATURE----------------")
+    print("="*60)
+    print("[MOMO CREATE] RAW SIGNATURE")
     print(raw_signature)
     
     signature = generate_momo_signature(raw_signature, MOMO_CONFIG['secret_key'])
     
-    print("--------------------SIGNATURE----------------")
+    print("[MOMO CREATE] SIGNATURE")
     print(signature)
     
     momo_data = {
@@ -95,16 +181,17 @@ def create_momo_payment():
         'amount': amount,
         'orderId': order_id,
         'orderInfo': order_info,
-        'redirectUrl': MOMO_CONFIG['redirect_url'],  # ← Ngrok URL
-        'ipnUrl': MOMO_CONFIG['ipn_url'],  # ← Ngrok URL
+        'redirectUrl': MOMO_CONFIG['redirect_url'],
+        'ipnUrl': MOMO_CONFIG['ipn_url'],
         'lang': "vi",
         'extraData': extra_data,
         'requestType': MOMO_CONFIG['request_type'],
         'signature': signature
     }
     
-    print("--------------------JSON REQUEST----------------")
+    print("[MOMO CREATE] JSON REQUEST")
     print(json.dumps(momo_data, indent=2))
+    print("="*60)
     
     try:
         json_data = json.dumps(momo_data)
@@ -118,7 +205,7 @@ def create_momo_payment():
             timeout=10
         )
         
-        print("--------------------JSON RESPONSE----------------")
+        print("[MOMO CREATE] JSON RESPONSE")
         print(response.json())
         
         result = response.json()
@@ -131,8 +218,8 @@ def create_momo_payment():
             log_activity(user_id, "INIT_MOMO_PAYMENT", "payment", payment.id, 
                         f"Initiated MoMo payment for {order_id}")
             
-            print("--------------------PAY URL----------------")
-            print(result.get('payUrl'))
+            print(f"[MOMO CREATE] ✅ PAY URL: {result.get('payUrl')}")
+            print(f"[MOMO CREATE] ✅ QR CODE URL: {result.get('qrCodeUrl')}")
             
             return jsonify({
                 "msg": "MoMo payment initiated successfully",
@@ -142,6 +229,7 @@ def create_momo_payment():
                 "request_id": request_id
             }), 200
         else:
+            print(f"[MOMO CREATE] ❌ FAILED: {result.get('message')}")
             return jsonify({
                 "msg": "MoMo payment failed",
                 "error": result.get('message'),
@@ -231,8 +319,6 @@ def momo_payment_callback():
         print(f"[SUCCESS] ✅ Payment completed: {order_id}")
         print(f"[SUCCESS] ✅ Appointment confirmed: {appointment.appointment_code if appointment else 'N/A'}")
         
-        # ⚠️ LƯU Ý: Redirect về frontend sẽ không hoạt động vì đây là callback từ MoMo
-        # App Flutter sẽ tự động check status và cập nhật UI
         return jsonify({"msg": "Payment completed successfully"}), 200
     else:
         payment.payment_status = 'failed'
