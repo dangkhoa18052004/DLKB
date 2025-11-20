@@ -206,8 +206,21 @@ def update_user(user_id):
         user.email = data['email']
     if 'phone' in data:
         user.phone = data['phone']
+        
+    # SỬA LỖI XỬ LÝ date_of_birth
     if 'date_of_birth' in data:
-        user.date_of_birth = datetime.strptime(data['date_of_birth'], '%Y-%m-%d').date()
+        dob_value = data['date_of_birth']
+        
+        # 1. Nếu giá trị tồn tại và không rỗng, thực hiện chuyển đổi
+        if dob_value:
+            try:
+                user.date_of_birth = datetime.strptime(dob_value, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({"msg": "Invalid date of birth format. Use YYYY-MM-DD"}), 400
+        else:
+            # 2. Nếu giá trị là None hoặc chuỗi rỗng (client gửi lên để xóa), gán None
+            user.date_of_birth = None 
+            
     if 'gender' in data:
         user.gender = data['gender']
     if 'address' in data:

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+// SỬ DỤNG ĐƯỜNG DẪN GÓI/TƯƠNG ĐỐI RÕ RÀNG
+import 'admin_user_management_screen.dart';
+import 'admin_reports_screen.dart';
+import 'admin_notifications_screen.dart'; // Đã Import thành công ở bước trước, chỉ giữ nguyên tên file
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -20,11 +24,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Dashboard'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-      ),
+      // BỎ AppBar ở đây vì nó đã được đặt trong HomeScreen
       body: FutureBuilder<Map<String, dynamic>>(
         future: _overviewData,
         builder: (context, snapshot) {
@@ -54,6 +54,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text('Tổng quan hôm nay',
                     style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 16),
+                // GridView Stats
                 GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -96,6 +97,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
                 const SizedBox(height: 32),
+
+                // === THÊM: QUẢN LÝ USER ===
+                Text('Quản lý', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                _buildManagementButton(
+                  context,
+                  title: 'Quản lý Người dùng',
+                  icon: Icons.group,
+                  color: Colors.purple,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              const AdminUserManagementScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildManagementButton(
+                  context,
+                  title: 'Quản lý Thông báo', // THÊM: Quản lý Thông báo
+                  icon: Icons.notifications_active,
+                  color: Colors.red,
+                  onTap: () {
+                    // Lỗi xảy ra do Class không được nhận diện,
+                    // chúng ta đã loại bỏ const và sử dụng tên Class chính xác.
+                    // Nếu lỗi vẫn còn, cần Clean Project.
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              AdminNotificationsScreen()), // Lời gọi chính xác
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildManagementButton(
+                  context,
+                  title: 'Báo cáo & Thống kê',
+                  icon: Icons.bar_chart,
+                  color: Colors.blueGrey,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const AdminReportsScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 32),
+
                 Text('Lịch hẹn đang chờ xử lý',
                     style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 8),
@@ -170,6 +223,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildManagementButton(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 30),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios,
+                  size: 18, color: color.withOpacity(0.7)),
+            ],
+          ),
         ),
       ),
     );

@@ -38,64 +38,81 @@ class HomeScreen extends StatelessWidget {
         break;
     }
 
+    // Các Actions cho AppBar
+    List<Widget> appBarActions = [];
+
+    // Nút chung cho tất cả
+    appBarActions.add(
+      IconButton(
+        icon: Stack(
+          children: [
+            const Icon(Icons.notifications_outlined),
+            Positioned(
+              right: 0,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 12,
+                  minHeight: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        onPressed: () {
+          Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+        },
+      ),
+    );
+
+    // Nút Profile chỉ dành cho Patient/Doctor (nếu Doctor có hồ sơ riêng)
+    // Giữ lại cho Doctor/Patient, loại bỏ cho Admin/Staff vì Admin/Staff sử dụng Dashboard
+    if (userRole == 'patient' || userRole == 'doctor') {
+      appBarActions.add(
+        IconButton(
+          icon: const Icon(Icons.account_circle),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfileScreen()),
+            );
+          },
+        ),
+      );
+    }
+
+    // Nút Logout chung
+    appBarActions.add(
+      // Logout
+      IconButton(
+        icon: const Icon(Icons.logout),
+        onPressed: () => _showLogoutDialog(context, authService),
+      ),
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_getAppBarTitle(userRole)),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: Stack(
-              children: [
-                const Icon(Icons.notifications_outlined),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 12,
-                      minHeight: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            onPressed: () {
-              Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const NotificationsScreen()));
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.account_circle),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              );
-            },
-          ),
-          // Logout
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _showLogoutDialog(context, authService),
-          ),
-        ],
+        actions: appBarActions, // Sử dụng danh sách Actions đã lọc
       ),
       body: bodyContent,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const SearchScreen())),
-        tooltip: 'Tìm kiếm',
-        child: const Icon(Icons.search),
-      ),
+      floatingActionButton: userRole == 'patient'
+          ? FloatingActionButton(
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const SearchScreen())),
+              tooltip: 'Tìm kiếm',
+              child: const Icon(Icons.search),
+            )
+          : null, // Chỉ hiển thị cho Patient
     );
   }
 
@@ -146,8 +163,10 @@ class HomeScreen extends StatelessWidget {
 
 // ============================================
 // PATIENT HOME CONTENT
+// ... (Không thay đổi)
 // ============================================
 class PatientHomeContent extends StatefulWidget {
+// ... (Phần còn lại của PatientHomeContent không thay đổi)
   final String userName;
   const PatientHomeContent({super.key, required this.userName});
 
