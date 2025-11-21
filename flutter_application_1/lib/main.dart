@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'screens/login_screen.dart'; // Đã thêm
-import 'screens/home_screen.dart';
+import 'screens/auth/login_screen.dart'; // Đã thêm
+import 'screens/customer/home_screen.dart';
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 

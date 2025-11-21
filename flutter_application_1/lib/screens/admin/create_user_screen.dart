@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import '../../services/api_service.dart';
 
 class CreateUserScreen extends StatefulWidget {
   const CreateUserScreen({super.key});
@@ -11,15 +11,11 @@ class CreateUserScreen extends StatefulWidget {
 class _CreateUserScreenState extends State<CreateUserScreen> {
   final _formKey = GlobalKey<FormState>();
   final ApiService _apiService = ApiService();
-
-  // Controllers
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _emailController = TextEditingController();
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
-
-  // Doctor/Patient specific fields
   final _licenseController = TextEditingController();
   final _specializationController = TextEditingController();
   final _feeController = TextEditingController();
@@ -29,6 +25,17 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
   DateTime? _dateOfBirth;
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  // THÊM BIẾN MỚI CHO DROPDOWN CHUYÊN KHOA
+  List<dynamic> _departments = [];
+  int? _selectedDepartmentId;
+  bool _isLoadingDepartments = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDepartments();
+  }
 
   @override
   void dispose() {
@@ -41,6 +48,26 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
     _specializationController.dispose();
     _feeController.dispose();
     super.dispose();
+  }
+
+  // THÊM HÀM LOAD DANH SÁCH KHOA
+  Future<void> _loadDepartments() async {
+    setState(() {
+      _isLoadingDepartments = true;
+    });
+
+    final result = await _apiService.getAllDepartments();
+
+    if (result['success']) {
+      setState(() {
+        _departments = result['data'] ?? [];
+        _isLoadingDepartments = false;
+      });
+    } else {
+      setState(() {
+        _isLoadingDepartments = false;
+      });
+    }
   }
 
   Future<void> _selectDate() async {
@@ -58,6 +85,22 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
   Future<void> _createUser() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // THÊM VALIDATION CHO BÁC SĨ
+    if (_selectedRole == 'doctor') {
+      if (_licenseController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Số giấy phép hành nghề là bắt buộc')),
+        );
+        return;
+      }
+      if (_selectedDepartmentId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vui lòng chọn chuyên khoa')),
+        );
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
     final userData = {
@@ -69,14 +112,12 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
       'role': _selectedRole,
       'gender': _selectedGender,
       'date_of_birth': _dateOfBirth?.toIso8601String().split('T')[0],
-      // Thêm các trường Doctor/Patient nếu có
       if (_selectedRole == 'doctor') ...{
         'license_number': _licenseController.text.trim(),
-        'department_id': 1, // Tạm thời để 1, cần có Dropdown Department thực tế
+        'department_id': _selectedDepartmentId, // SỬA THÀNH BIẾN MỚI
         'specialization': _specializationController.text.trim(),
         'consultation_fee': num.tryParse(_feeController.text.trim()) ?? 0,
       }
-      // Các trường patient khác (blood_type, insurance,...) có thể bổ sung sau
     };
 
     try {
@@ -92,7 +133,7 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          Navigator.pop(context, true); // Trả về true để load lại list
+          Navigator.pop(context, true);
         }
       } else {
         if (mounted) {
@@ -132,7 +173,6 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Chọn Vai trò
               DropdownButtonFormField<String>(
                 value: _selectedRole,
                 decoration: InputDecoration(
@@ -155,12 +195,10 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               ),
               const SizedBox(height: 24),
 
-              // === THÔNG TIN CƠ BẢN ===
               Text('Thông tin cơ bản',
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
 
-              // Họ và tên
               TextFormField(
                 controller: _fullNameController,
                 decoration:
@@ -171,7 +209,6 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Tên đăng nhập
               TextFormField(
                 controller: _usernameController,
                 decoration:
@@ -182,7 +219,6 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Mật khẩu
               TextFormField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
@@ -209,7 +245,6 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Email
               TextFormField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
@@ -226,7 +261,6 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Phone
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
@@ -237,7 +271,6 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Giới tính
               DropdownButtonFormField<String>(
                 value: _selectedGender,
                 decoration: _inputDecoration('Giới tính', Icons.wc),
@@ -265,7 +298,6 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
               ),
               const SizedBox(height: 32),
 
-              // === THÔNG TIN CHUYÊN MÔN (Nếu là Doctor) ===
               if (_selectedRole == 'doctor') ...[
                 Text('Thông tin Bác sĩ',
                     style: Theme.of(context).textTheme.titleLarge),
@@ -282,10 +314,44 @@ class _CreateUserScreenState extends State<CreateUserScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Specialization
+                // CHUYÊN KHOA - ĐÃ SỬA THÀNH DROPDOWN
+                _isLoadingDepartments
+                    ? const CircularProgressIndicator()
+                    : DropdownButtonFormField<int?>(
+                        value: _selectedDepartmentId,
+                        decoration:
+                            _inputDecoration('Chuyên khoa *', Icons.healing),
+                        items: [
+                          const DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text('Chọn khoa...'),
+                          ),
+                          ..._departments.map<DropdownMenuItem<int?>>((dept) {
+                            return DropdownMenuItem<int?>(
+                              value: dept['id'] as int?,
+                              child: Text(dept['name'].toString()),
+                            );
+                          }).toList(),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedDepartmentId = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (_selectedRole == 'doctor' && value == null) {
+                            return 'Vui lòng chọn chuyên khoa';
+                          }
+                          return null;
+                        },
+                      ),
+                const SizedBox(height: 16),
+
+                // Chuyên môn (giữ lại để nhập chuyên môn cụ thể)
                 TextFormField(
                   controller: _specializationController,
-                  decoration: _inputDecoration('Chuyên khoa', Icons.healing),
+                  decoration:
+                      _inputDecoration('Chuyên môn (tùy chọn)', Icons.work),
                 ),
                 const SizedBox(height: 16),
 

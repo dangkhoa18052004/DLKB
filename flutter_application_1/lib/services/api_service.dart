@@ -3,7 +3,6 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // Đảm bảo IP này là chính xác
   static const String baseUrl = 'http://192.168.100.151:5000/api';
 
   Future<String?> getToken() async {
@@ -27,6 +26,34 @@ class ApiService {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+  }
+
+  Future<Map<String, dynamic>> getAppointmentStats({String? timeframe}) async {
+    String endpoint = '/stats/appointments/daily';
+    if (timeframe != null) {
+      endpoint += '?timeframe=$timeframe';
+    }
+    return await _sendRequest('GET', endpoint, null);
+  }
+
+  Future<Map<String, dynamic>> getRevenueStats({String? timeframe}) async {
+    String endpoint = '/stats/revenue/overview';
+    if (timeframe != null) {
+      endpoint += '?timeframe=$timeframe';
+    }
+    return await _sendRequest('GET', endpoint, null);
+  }
+
+  Future<Map<String, dynamic>> getPatientStats() async {
+    return await _sendRequest('GET', '/stats/patients/overview', null);
+  }
+
+  Future<Map<String, dynamic>> getDoctorPerformance() async {
+    return await _sendRequest('GET', '/stats/doctors/performance', null);
+  }
+
+  Future<Map<String, dynamic>> getDepartmentStats() async {
+    return await _sendRequest('GET', '/stats/departments/statistics', null);
   }
 
   // ===================================
@@ -210,7 +237,8 @@ class ApiService {
     });
   }
 
-  Future<Map<String, dynamic>> getMyAppointments() async {
+  Future<Map<String, dynamic>> getMyAppointments(
+      {required String date, String? status}) async {
     return await _sendRequest('GET', '/booking/appointments/me', null);
   }
 
@@ -259,8 +287,53 @@ class ApiService {
     });
   }
 
-  // === ADMIN/STATS APIS ===
+  // ===================================
+  // === ADMIN/STAFF APIS ===
+  // ===================================
 
+  // --- ADMIN DOCTORS ---
+  Future<Map<String, dynamic>> getAdminDoctors({
+    int page = 1,
+    int perPage = 20,
+    int? departmentId,
+    bool? isAvailable,
+  }) async {
+    String endpoint = '/admin/doctors?page=$page&per_page=$perPage';
+
+    if (departmentId != null) {
+      endpoint += '&department_id=$departmentId';
+    }
+    if (isAvailable != null) {
+      endpoint += '&is_available=$isAvailable';
+    }
+    return await _sendRequest('GET', endpoint, null);
+  }
+
+  Future<Map<String, dynamic>> updateDoctor(
+    int doctorId,
+    Map<String, dynamic> data,
+  ) async {
+    return await put('/admin/doctors/$doctorId', data);
+  }
+
+  Future<Map<String, dynamic>> getDoctorSchedule(int doctorId) async {
+    final result =
+        await _sendRequest('GET', '/doctors/$doctorId/schedules', null);
+
+    if (result['success']) {
+      final data = result['data'];
+      // API có thể trả về list hoặc object
+      if (data is List) {
+        return {'success': true, 'data': data};
+      } else {
+        // Giả sử nếu là object thì chứa key 'schedules' hoặc list trực tiếp
+        return {'success': true, 'data': data['schedules'] ?? data};
+      }
+    }
+    return result;
+  }
+
+  // --- ADMIN/STATS APIS ---
   Future<Map<String, dynamic>> getDashboardOverview() async {
     return await _sendRequest('GET', '/stats/dashboard/overview', null);
   }
@@ -339,6 +412,70 @@ class ApiService {
     });
   }
 
+  Future<Map<String, dynamic>> getAdminReviews({
+    int page = 1,
+    int perPage = 20,
+    bool? isApproved,
+  }) async {
+    String endpoint = '/admin/reviews?page=$page&per_page=$perPage';
+    if (isApproved != null) {
+      endpoint += '&is_approved=${isApproved ? 'true' : 'false'}';
+    }
+    return await _sendRequest('GET', endpoint, null);
+  }
+
+  Future<Map<String, dynamic>> approveReview(int reviewId) async {
+    // PUT /admin/reviews/<int:review_id>/approve
+    return await put('/admin/reviews/$reviewId/approve', {});
+  }
+
+  Future<Map<String, dynamic>> deleteReview(int reviewId) async {
+    // DELETE /admin/reviews/<int:review_id>
+    return await delete('/admin/reviews/$reviewId');
+  }
+
+// --- ADMIN FEEDBACK MANAGEMENT ---
+
+  Future<Map<String, dynamic>> getAdminFeedback({
+    int page = 1,
+    int perPage = 20,
+    String? status,
+    String? priority,
+  }) async {
+    String endpoint = '/admin/feedback?page=$page&per_page=$perPage';
+    if (status != null) endpoint += '&status=$status';
+    if (priority != null) endpoint += '&priority=$priority';
+
+    return await _sendRequest('GET', endpoint, null);
+  }
+
+  Future<Map<String, dynamic>> respondToFeedback(
+    int feedbackId,
+    String responseMessage,
+    String newStatus,
+  ) async {
+    return await put('/admin/feedback/$feedbackId/respond', {
+      'response': responseMessage,
+      'status': newStatus,
+    });
+  }
+
+// --- ADMIN PAYMENT (GET STATUS) ---
+  Future<Map<String, dynamic>> getAdminPaymentRecords({
+    int page = 1,
+    int perPage = 20,
+    String? status,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    String endpoint = '/admin/payments?page=$page&per_page=$perPage';
+
+    if (status != null) endpoint += '&status=$status';
+    if (dateFrom != null) endpoint += '&date_from=$dateFrom';
+    if (dateTo != null) endpoint += '&date_to=$dateTo';
+    return await _sendRequest('GET', endpoint, null);
+  }
+
   Future<Map<String, dynamic>> getAdminAppointments({
     int page = 1,
     int perPage = 20,
@@ -412,6 +549,70 @@ class ApiService {
     return await delete('/admin/services/$serviceId');
   }
 
+  Future<Map<String, dynamic>> getDoctorProfile() async {
+    // GET /doctor/profile
+    return await _sendRequest('GET', '/doctor/profile', null);
+  }
+
+  Future<Map<String, dynamic>> updateDoctorProfile(
+      Map<String, dynamic> data) async {
+    // PUT /doctor/profile
+    return await put('/doctor/profile', data);
+  }
+
+  Future<Map<String, dynamic>> getDoctorAppointments({
+    String? date,
+    String? status,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    // GET /doctor/appointments
+    String endpoint = '/doctor/appointments?page=$page&per_page=$perPage';
+    if (date != null) endpoint += '&date=$date';
+    if (status != null) endpoint += '&status=$status';
+
+    // Lưu ý: Hàm này thay thế cho getMyAppointments() nếu user là Doctor.
+    // Nếu getMyAppointments() được dùng chung, cần thay thế nó hoặc tạo mới.
+    // Tôi tạo hàm mới rõ ràng hơn để tránh nhầm lẫn.
+    final result = await _sendRequest('GET', endpoint, null);
+
+    // Hàm này trả về object có key 'appointments', cần trích xuất nếu cần
+    return result;
+  }
+
+  Future<Map<String, dynamic>> getDoctorAppointmentDetail(
+      int appointmentId) async {
+    // GET /doctor/appointments/<id>
+    return await _sendRequest(
+        'GET', '/doctor/appointments/$appointmentId', null);
+  }
+
+  Future<Map<String, dynamic>> checkInAppointment(int appointmentId) async {
+    // PUT /doctor/appointments/<id>/check-in
+    return await put('/doctor/appointments/$appointmentId/check-in', {});
+  }
+
+  Future<Map<String, dynamic>> createMedicalRecord(
+      Map<String, dynamic> recordData) async {
+    // POST /doctor/medical-records
+    return await post('/doctor/medical-records', recordData);
+  }
+
+  Future<Map<String, dynamic>> createBulkPrescriptions(
+      Map<String, dynamic> prescriptionsData) async {
+    // POST /doctor/prescriptions/bulk
+    return await post('/doctor/prescriptions/bulk', prescriptionsData);
+  }
+
+  Future<Map<String, dynamic>> createFollowUpReminder(
+      Map<String, dynamic> reminderData) async {
+    // POST /doctor/follow-up-reminders
+    return await post('/doctor/follow-up-reminders', reminderData);
+  }
+
+  // ===================================
+  // === PAYMENT APIS ===
+  // ===================================
   // Create a payment record (pending)
   Future<Map<String, dynamic>> createPaymentRecord(
       int appointmentId, double amount, String provider) async {
@@ -433,7 +634,9 @@ class ApiService {
         'GET', '/payment/status?payment_code=$paymentCode', null);
   }
 
+  // ===================================
   // === REVIEW & FEEDBACK APIS ===
+  // ===================================
 
   Future<Map<String, dynamic>> getMyReviews() async {
     final result = await _sendRequest('GET', '/patient/reviews/my', null);

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../services/api_service.dart';
+import '../../services/api_service.dart';
 import 'reschedule_appointment_screen.dart';
 // THÊM: Import màn hình FeedbackReviewScreen
 import 'feedback_review_screen.dart';
@@ -46,7 +46,7 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen>
     });
 
     try {
-      final result = await _apiService.getMyAppointments(); //
+      final result = await _apiService.getMyAppointments(date: ''); //
 
       if (result['success']) {
         final List<dynamic> appointments = result['data'] ?? [];

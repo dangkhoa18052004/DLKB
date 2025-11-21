@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import '../../services/api_service.dart';
 // Sử dụng prefix để tham chiếu BookAppointmentScreen (Đã đúng)
 import 'book_appointment_screen.dart' as BAS;
 // THAY THẾ: Import model Doctor chung (Đã đúng)
-import '../models/doctor.dart';
+import '../../models/doctor.dart';
 
 // XÓA ĐỊNH NGHĨA CLASS DOCTOR NẾU NÓ VẪN TỒN TẠI TRONG FILE NÀY
 

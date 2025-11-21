@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'send_notification_screen.dart';
-import '../services/api_service.dart';
+import '../customer/send_notification_screen.dart';
+import '../../services/api_service.dart';
 
 class AdminNotificationsScreen extends StatefulWidget {
   const AdminNotificationsScreen({super.key});

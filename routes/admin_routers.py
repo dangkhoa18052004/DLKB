@@ -269,11 +269,72 @@ def delete_user(user_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"msg": f"Error deleting user: {str(e)}"}), 500
+    
+@admin_bp.route('/payments', methods=['GET'])
+@jwt_required()
+@admin_required
+def get_all_payments():
+    """Lấy danh sách tất cả giao dịch thanh toán với filter và phân trang"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    status = request.args.get('status') 
+    date_from_str = request.args.get('date_from')
+    date_to_str = request.args.get('date_to')
+    
+    query = Payment.query.outerjoin(Patient, Payment.patient_id == Patient.id).outerjoin(User, Patient.user_id == User.id).outerjoin(Appointment, Payment.appointment_id == Appointment.id)
+    
+    if status:
+        query = query.filter(Payment.payment_status == status)
 
-# =============================================
+    if date_from_str:
+        try:
+            date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+            query = query.filter(func.date(Payment.payment_date) >= date_from)
+        except ValueError:
+            pass 
+            
+    if date_to_str:
+        try:
+            date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+            query = query.filter(func.date(Payment.payment_date) <= date_to)
+        except ValueError:
+            pass 
+
+    query = query.order_by(Payment.payment_date.desc().nullslast(), Payment.created_at.desc())
+    
+    pagination = query.paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    results = []
+    for payment in pagination.items:        
+        patient_name = 'N/A'
+        if hasattr(payment, 'patient') and payment.patient and hasattr(payment.patient, 'user') and payment.patient.user:
+            patient_name = payment.patient.user.full_name
+        appointment_code = 'N/A'
+        if hasattr(payment, 'appointment') and payment.appointment:
+            appointment_code = payment.appointment.appointment_code
+        results.append({
+            'id': payment.id,
+            'payment_code': payment.payment_code,
+            'patient_name': patient_name,
+            'amount': str(payment.amount),
+            'payment_method': payment.payment_method,
+            'payment_status': payment.payment_status,
+            'transaction_id': payment.transaction_id,
+            'appointment_code': appointment_code,
+            'payment_date': payment.payment_date.strftime('%Y-%m-%d %H:%M:%S') if payment.payment_date else None,
+            'created_at': payment.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        })
+    
+    return jsonify({
+        'payments': results,
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'current_page': page
+    }), 200
+
 # DOCTOR MANAGEMENT
-# =============================================
-
 @admin_bp.route('/doctors', methods=['GET'])
 @jwt_required()
 @admin_required
@@ -665,12 +726,14 @@ def update_appointment_status(appointment_id):
 @jwt_required()
 @admin_required
 def get_all_reviews():
-    """Lấy danh sách tất cả đánh giá"""
+    """Lấy danh sách tất cả đánh giá với phân trang và lọc"""
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     is_approved = request.args.get('is_approved')
     
-    query = Review.query
+    # SỬA LỖI: Sử dụng outerjoin để tải các mối quan hệ Patient và User
+    # cần thiết cho việc hiển thị tên.
+    query = Review.query.outerjoin(Patient, Review.patient_id == Patient.id).outerjoin(User, Patient.user_id == User.id)
     
     if is_approved is not None:
         query = query.filter_by(is_approved=(is_approved.lower() == 'true'))
@@ -681,10 +744,18 @@ def get_all_reviews():
     
     results = []
     for review in pagination.items:
+        
+        patient_name = 'N/A'
+        if review.is_anonymous:
+            patient_name = 'Anonymous'
+        elif hasattr(review, 'patient') and review.patient and hasattr(review.patient, 'user') and review.patient.user:
+            patient_name = review.patient.user.full_name
+        doctor_name = review.doctor.user.full_name if review.doctor and hasattr(review.doctor, 'user') and review.doctor.user else 'N/A'
+            
         results.append({
             'id': review.id,
-            'patient_name': 'Anonymous' if review.is_anonymous else (review.patient.user.full_name if review.patient else 'N/A'),
-            'doctor_name': review.doctor.user.full_name if review.doctor else 'N/A',
+            'patient_name': patient_name,
+            'doctor_name': doctor_name,
             'rating': review.rating,
             'service_rating': review.service_rating,
             'facility_rating': review.facility_rating,
@@ -751,7 +822,7 @@ def get_all_feedback():
     status = request.args.get('status')
     priority = request.args.get('priority')
     
-    query = Feedback.query
+    query = Feedback.query.outerjoin(User, Feedback.user_id == User.id)
     
     if status:
         query = query.filter_by(status=status)

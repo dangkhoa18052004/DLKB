@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../services/api_service.dart';
+import '../../../services/api_service.dart';
 import 'payment_screen.dart';
 // THÊM: Import model Doctor chung
-import '../models/doctor.dart';
+import '../../models/doctor.dart';
 
 // Giả định SelectDoctorScreen là nơi trả về Doctor object
 class SelectDoctorScreen extends StatelessWidget {

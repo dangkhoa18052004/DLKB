@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import '../../services/api_service.dart';
 import 'create_user_screen.dart';
 import 'edit_user_screen.dart';
 
@@ -45,11 +45,9 @@ class _AdminUserManagementScreenState extends State<AdminUserManagementScreen>
     });
 
     try {
-      // Lỗi 5: Sửa lỗi 'getAllUsers'
       final result = await _apiService.getAllUsers();
 
       if (result['success']) {
-        // API trả về danh sách người dùng trong key 'users'
         final List<dynamic> users = result['data']['users'] ?? [];
 
         setState(() {

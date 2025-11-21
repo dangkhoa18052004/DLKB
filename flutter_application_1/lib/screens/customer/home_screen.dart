@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/auth_service.dart';
-import '../services/api_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 import 'select_department_screen.dart';
 import 'my_appointment_screen.dart';
 import 'medical_history_screen.dart';
-import 'profile_screen.dart';
-import 'dashboard_screen.dart';
-import 'search_screen.dart';
-import 'notifications_screen.dart';
+import '../profile_screen.dart';
+import '../admin/dashboard_screen.dart';
+import '../search_screen.dart';
+import '../notifications_screen.dart';
 import 'feedback_review_screen.dart';
 import 'payment_history_screen.dart';
 import 'payment_screen.dart';
@@ -189,7 +189,7 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
     setState(() => _isLoading = true);
 
     try {
-      final appointments = await _apiService.getMyAppointments();
+      final appointments = await _apiService.getMyAppointments(date: '');
       if (appointments['success']) {
         final List data = appointments['data'] ?? [];
         setState(() {
