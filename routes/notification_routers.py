@@ -97,6 +97,75 @@ def mark_all_as_read():
     except Exception as e:
         db.session.rollback()
         return jsonify({"msg": f"Error: {str(e)}"}), 500
+    
+@notification_bp.route('/admin/sent-history', methods=['GET'])
+@jwt_required()
+def get_sent_history():
+    """Admin xem lịch sử tất cả thông báo đã gửi"""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    if user.role != 'admin':
+        return jsonify({"msg": "Admin access required"}), 403
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    notification_type = request.args.get('type')  # Filter by type
+    target_role = request.args.get('target_role')  # Filter by target_role
+    
+    # Query tất cả notifications (group by title + message + created_at để tránh duplicate)
+    query = db.session.query(
+        Notification.title,
+        Notification.message,
+        Notification.type,
+        Notification.target_role,
+        Notification.sender_id,
+        db.func.count(Notification.id).label('recipient_count'),
+        db.func.max(Notification.created_at).label('sent_at')
+    ).filter(
+        Notification.sender_id.isnot(None)  # Chỉ lấy notifications có sender
+    )
+    
+    # Apply filters
+    if notification_type:
+        query = query.filter(Notification.type == notification_type)
+    
+    if target_role:
+        query = query.filter(Notification.target_role == target_role)
+    
+    # Group by để gộp các broadcast notifications
+    query = query.group_by(
+        Notification.title,
+        Notification.message,
+        Notification.type,
+        Notification.target_role,
+        Notification.sender_id,
+        db.func.date(Notification.created_at)  # Group by date
+    ).order_by(db.desc('sent_at'))
+    
+    # Paginate
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    
+    results = []
+    for item in pagination.items:
+        sender = User.query.get(item.sender_id) if item.sender_id else None
+        results.append({
+            'title': item.title,
+            'message': item.message,
+            'type': item.type,
+            'target_role': item.target_role,
+            'recipient_count': item.recipient_count,
+            'sender_name': sender.full_name if sender else 'System',
+            'sent_at': item.sent_at.strftime('%Y-%m-%d %H:%M:%S')
+        })
+    
+    return jsonify({
+        'notifications': results,
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'current_page': page
+    }), 200
+
 
 @notification_bp.route('/<int:notification_id>', methods=['DELETE'])
 @jwt_required()
@@ -140,7 +209,6 @@ def send_notification():
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     
-    # Chỉ admin hoặc staff mới có thể gửi thông báo
     if user.role not in ['admin', 'staff']:
         return jsonify({"msg": "Permission denied"}), 403
     
@@ -152,6 +220,7 @@ def send_notification():
     
     new_notification = Notification(
         user_id=data['recipient_id'],
+        sender_id=user_id,  # ✅ Thêm sender_id
         title=data['title'],
         message=data['message'],
         type=data.get('type', 'system'),
@@ -190,8 +259,7 @@ def broadcast_notification():
     if not all(field in data for field in required_fields):
         return jsonify({"msg": "Missing required fields"}), 400
     
-    # Lấy danh sách user cần gửi
-    target_role = data.get('target_role')  # 'all', 'patient', 'doctor', 'staff'
+    target_role = data.get('target_role', 'all')
     
     query = User.query.filter_by(is_active=True)
     
@@ -204,9 +272,11 @@ def broadcast_notification():
     for target_user in users:
         notification = Notification(
             user_id=target_user.id,
+            sender_id=user_id,  # ✅ Thêm sender_id
             title=data['title'],
             message=data['message'],
             type=data.get('type', 'system'),
+            target_role=target_role,  # ✅ Lưu target_role
             sent_via='in_app'
         )
         notifications.append(notification)
@@ -215,7 +285,7 @@ def broadcast_notification():
         db.session.add_all(notifications)
         db.session.commit()
         log_activity(user_id, "BROADCAST_NOTIFICATION", "notification", None, 
-                    f"Broadcasted notification to {len(notifications)} users")
+                    f"Broadcasted notification to {len(notifications)} users (role: {target_role})")
         
         return jsonify({
             "msg": "Notification broadcasted successfully",
@@ -225,6 +295,110 @@ def broadcast_notification():
         db.session.rollback()
         return jsonify({"msg": f"Error broadcasting notification: {str(e)}"}), 500
 
+
+@notification_bp.route('/admin/broadcast/update', methods=['PUT'])  # ✅ Đổi từ /<int:id> sang /update
+@jwt_required()
+def update_broadcast_notification():
+    """Admin cập nhật thông báo broadcast đã gửi"""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    if user.role != 'admin':
+        return jsonify({"msg": "Admin access required"}), 403
+    
+    data = request.get_json()
+    
+    required_fields = ['old_title', 'old_message', 'sent_date', 'title', 'message']
+    if not all(field in data for field in required_fields):
+        return jsonify({"msg": "Missing required fields"}), 400
+    
+    # Parse date
+    try:
+        sent_date = datetime.strptime(data['sent_date'], '%Y-%m-%d').date()
+    except:
+        return jsonify({"msg": "Invalid date format"}), 400
+    
+    # Tìm tất cả notifications cùng nhóm
+    notifications_to_update = Notification.query.filter(
+        Notification.title == data['old_title'],
+        Notification.message == data['old_message'],
+        db.func.date(Notification.created_at) == sent_date,
+        Notification.sender_id == user_id
+    ).all()
+    
+    if not notifications_to_update:
+        return jsonify({"msg": "Notifications not found"}), 404
+    
+    try:
+        for notif in notifications_to_update:
+            notif.title = data['title']
+            notif.message = data['message']
+            if 'type' in data:
+                notif.type = data['type']
+        
+        db.session.commit()
+        
+        log_activity(user_id, "UPDATE_BROADCAST", "notification", None, 
+                    f"Updated {len(notifications_to_update)} notifications")
+        
+        return jsonify({
+            "msg": "Notifications updated successfully",
+            "updated_count": len(notifications_to_update)
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"msg": f"Error updating notifications: {str(e)}"}), 500
+    
+@notification_bp.route('/admin/broadcast/delete', methods=['DELETE'])
+@jwt_required()
+def delete_broadcast_notification():
+    """Admin xóa thông báo broadcast đã gửi"""
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    
+    if user.role != 'admin':
+        return jsonify({"msg": "Admin access required"}), 403
+    
+    data = request.get_json()
+    
+    required_fields = ['title', 'message', 'sent_date']
+    if not all(field in data for field in required_fields):
+        return jsonify({"msg": "Missing required fields"}), 400
+    
+    # Parse date
+    try:
+        sent_date = datetime.strptime(data['sent_date'], '%Y-%m-%d').date()
+    except:
+        return jsonify({"msg": "Invalid date format"}), 400
+    
+    # Tìm tất cả notifications cùng nhóm
+    notifications_to_delete = Notification.query.filter(
+        Notification.title == data['title'],
+        Notification.message == data['message'],
+        db.func.date(Notification.created_at) == sent_date,
+        Notification.sender_id == user_id
+    ).all()
+    
+    if not notifications_to_delete:
+        return jsonify({"msg": "Notifications not found"}), 404
+    
+    try:
+        count = len(notifications_to_delete)
+        for notif in notifications_to_delete:
+            db.session.delete(notif)
+        
+        db.session.commit()
+        
+        log_activity(user_id, "DELETE_BROADCAST", "notification", None, 
+                    f"Deleted {count} notifications")
+        
+        return jsonify({
+            "msg": "Notifications deleted successfully",
+            "deleted_count": count
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"msg": f"Error deleting notifications: {str(e)}"}), 500
 # =============================================
 # UTILITY FUNCTIONS
 # =============================================

@@ -2,6 +2,7 @@ from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager
 from config import Config
 from dotenv import load_dotenv
+from flask_migrate import Migrate
 from models import SystemSetting, db, bcrypt
 from routes.auth_routes import auth_bp
 from routes.public_routes import public_bp
@@ -26,6 +27,7 @@ def create_app(config_class=Config):
     db.init_app(app)
     bcrypt.init_app(app)
     jwt = JWTManager(app)
+    migrate = Migrate(app, db)  
 
     # JWT Error Handlers (Giữ nguyên)
     @jwt.unauthorized_loader

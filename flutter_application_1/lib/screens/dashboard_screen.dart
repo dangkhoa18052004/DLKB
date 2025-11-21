@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-// SỬ DỤNG ĐƯỜNG DẪN GÓI/TƯƠNG ĐỐI RÕ RÀNG
 import 'admin_user_management_screen.dart';
 import 'admin_reports_screen.dart';
-import 'admin_notifications_screen.dart'; // Đã Import thành công ở bước trước, chỉ giữ nguyên tên file
+import 'admin_notifications_screen.dart';
+import 'admin_appointments_screen.dart'; // ✅ THÊM IMPORT NÀY
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -24,7 +24,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // BỎ AppBar ở đây vì nó đã được đặt trong HomeScreen
       body: FutureBuilder<Map<String, dynamic>>(
         future: _overviewData,
         builder: (context, snapshot) {
@@ -54,6 +53,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text('Tổng quan hôm nay',
                     style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 16),
+
                 // GridView Stats
                 GridView.count(
                   shrinkWrap: true,
@@ -98,9 +98,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 32),
 
-                // === THÊM: QUẢN LÝ USER ===
+                // === QUẢN LÝ ===
                 Text('Quản lý', style: Theme.of(context).textTheme.titleLarge),
                 const SizedBox(height: 12),
+
+                // ✅ THÊM NÚT QUẢN LÝ LỊCH HẸN
+                _buildManagementButton(
+                  context,
+                  title: 'Quản lý Lịch hẹn',
+                  icon: Icons.event_note,
+                  color: Colors.blue,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AdminAppointmentsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+
                 _buildManagementButton(
                   context,
                   title: 'Quản lý Người dùng',
@@ -110,30 +128,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (context) =>
-                              const AdminUserManagementScreen()),
+                        builder: (context) => const AdminUserManagementScreen(),
+                      ),
                     );
                   },
                 ),
                 const SizedBox(height: 12),
+
                 _buildManagementButton(
                   context,
-                  title: 'Quản lý Thông báo', // THÊM: Quản lý Thông báo
+                  title: 'Quản lý Thông báo',
                   icon: Icons.notifications_active,
                   color: Colors.red,
                   onTap: () {
-                    // Lỗi xảy ra do Class không được nhận diện,
-                    // chúng ta đã loại bỏ const và sử dụng tên Class chính xác.
-                    // Nếu lỗi vẫn còn, cần Clean Project.
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (context) =>
-                              AdminNotificationsScreen()), // Lời gọi chính xác
+                        builder: (context) => const AdminNotificationsScreen(),
+                      ),
                     );
                   },
                 ),
                 const SizedBox(height: 12),
+
                 _buildManagementButton(
                   context,
                   title: 'Báo cáo & Thống kê',
@@ -143,26 +160,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (context) => const AdminReportsScreen()),
+                        builder: (context) => const AdminReportsScreen(),
+                      ),
                     );
                   },
                 ),
                 const SizedBox(height: 32),
 
-                Text('Lịch hẹn đang chờ xử lý',
-                    style: Theme.of(context).textTheme.titleLarge),
+                // ✅ LỊCH HẸN ĐANG CHỜ - CLICKABLE
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Lịch hẹn đang chờ xử lý',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const AdminAppointmentsScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text('Xem tất cả'),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 8),
-                Card(
-                  child: ListTile(
-                    leading:
-                        const Icon(Icons.access_time, color: Colors.orange),
-                    title: const Text('Tổng số lịch hẹn đang chờ duyệt'),
-                    trailing: Text(
-                      appointments['pending'].toString(),
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(color: Colors.orange),
+
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AdminAppointmentsScreen(),
+                      ),
+                    );
+                  },
+                  child: Card(
+                    child: ListTile(
+                      leading:
+                          const Icon(Icons.access_time, color: Colors.orange),
+                      title: const Text('Tổng số lịch hẹn đang chờ duyệt'),
+                      trailing: Text(
+                        appointments['pending'].toString(),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(color: Colors.orange),
+                      ),
                     ),
                   ),
                 ),
@@ -217,7 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             Text(
               subtitle,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
                 color: Colors.black54,
               ),
@@ -264,8 +313,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
-              Icon(Icons.arrow_forward_ios,
-                  size: 18, color: color.withOpacity(0.7)),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 18,
+                color: color.withOpacity(0.7),
+              ),
             ],
           ),
         ),

@@ -286,18 +286,130 @@ class ApiService {
     return result;
   }
 
-  // ADMIN NOTIFICATION APIS (TỪ ĐỀ XUẤT TRƯỚC)
+  // ADMIN NOTIFICATION APIS
+
+  Future<Map<String, dynamic>> getAdminSentHistory({
+    int page = 1,
+    int perPage = 50,
+    String? type,
+    String? targetRole,
+  }) async {
+    String endpoint =
+        '/notifications/admin/sent-history?page=$page&per_page=$perPage';
+
+    if (type != null) {
+      endpoint += '&type=$type';
+    }
+    if (targetRole != null) {
+      endpoint += '&target_role=$targetRole';
+    }
+
+    return await _sendRequest('GET', endpoint, null);
+  }
 
   Future<Map<String, dynamic>> sendNotification(
       Map<String, dynamic> data) async {
     // Endpoint: POST /notification/send
-    return await post('/notification/send', data);
+    return await post('/notifications/send', data);
   }
 
   Future<Map<String, dynamic>> broadcastNotification(
       Map<String, dynamic> data) async {
     // Endpoint: POST /notification/broadcast
-    return await post('/notification/broadcast', data);
+    return await post('/notifications/broadcast', data);
+  }
+
+  Future<Map<String, dynamic>> updateBroadcastNotification(
+      Map<String, dynamic> data) async {
+    // ✅ Bỏ notificationId parameter
+    return await put(
+        '/notifications/admin/broadcast/update', data); // ✅ Đổi endpoint
+  }
+
+  Future<Map<String, dynamic>> deleteBroadcastNotification({
+    required String title,
+    required String message,
+    required String sentDate,
+  }) async {
+    return await _sendRequest(
+        'DELETE', '/notifications/admin/broadcast/delete', {
+      'title': title,
+      'message': message,
+      'sent_date': sentDate,
+    });
+  }
+
+  Future<Map<String, dynamic>> getAdminAppointments({
+    int page = 1,
+    int perPage = 20,
+    String? status,
+    String? dateFrom,
+    String? dateTo,
+    int? doctorId,
+    int? patientId,
+  }) async {
+    String endpoint = '/admin/appointments?page=$page&per_page=$perPage';
+
+    if (status != null) endpoint += '&status=$status';
+    if (dateFrom != null) endpoint += '&date_from=$dateFrom';
+    if (dateTo != null) endpoint += '&date_to=$dateTo';
+    if (doctorId != null) endpoint += '&doctor_id=$doctorId';
+    if (patientId != null) endpoint += '&patient_id=$patientId';
+
+    return await _sendRequest('GET', endpoint, null);
+  }
+
+  Future<Map<String, dynamic>> updateAppointmentStatus(
+    int appointmentId,
+    String newStatus, {
+    String? reason,
+  }) async {
+    return await put('/admin/appointments/$appointmentId/status', {
+      'status': newStatus,
+      if (reason != null) 'reason': reason,
+    });
+  }
+
+  Future<Map<String, dynamic>> getAppointmentDetail(int appointmentId) async {
+    return await _sendRequest(
+        'GET', '/admin/appointments/$appointmentId', null);
+  }
+
+  Future<Map<String, dynamic>> getAllDepartments() async {
+    return await _sendRequest('GET', '/admin/departments', null);
+  }
+
+  Future<Map<String, dynamic>> createDepartment(
+      Map<String, dynamic> data) async {
+    return await post('/admin/departments', data);
+  }
+
+  Future<Map<String, dynamic>> updateDepartment(
+      int deptId, Map<String, dynamic> data) async {
+    return await put('/admin/departments/$deptId', data);
+  }
+
+  Future<Map<String, dynamic>> deleteDepartment(int deptId) async {
+    return await delete('/admin/departments/$deptId');
+  }
+
+// === ADMIN SERVICES MANAGEMENT ===
+
+  Future<Map<String, dynamic>> getAllServices() async {
+    return await _sendRequest('GET', '/admin/services', null);
+  }
+
+  Future<Map<String, dynamic>> createService(Map<String, dynamic> data) async {
+    return await post('/admin/services', data);
+  }
+
+  Future<Map<String, dynamic>> updateService(
+      int serviceId, Map<String, dynamic> data) async {
+    return await put('/admin/services/$serviceId', data);
+  }
+
+  Future<Map<String, dynamic>> deleteService(int serviceId) async {
+    return await delete('/admin/services/$serviceId');
   }
 
   // Create a payment record (pending)
