@@ -4,14 +4,20 @@ from models import (db, User, Doctor, Appointment, MedicalRecord,
                      Prescription, DoctorSchedule, DoctorLeave, Patient,
                      FollowUpReminder)
 from utils import log_activity, generate_code, doctor_required, get_doctor_id_from_user
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from sqlalchemy.exc import IntegrityError
-
+from flask import Blueprint, jsonify, request
+def day_name_to_int(day_name):
+    """Ánh xạ tên ngày (tiếng Anh) sang số nguyên (1=Thứ 2, ..., 0=CN)"""
+    # Lưu ý: Flask SQLAlchemy thường sử dụng 0 là Chủ Nhật, 1 là Thứ Hai
+    day_map = {
+        'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4,
+        'friday': 5, 'saturday': 6, 'sunday': 0
+    }
+    return day_map.get(day_name.lower())
 doctor_bp = Blueprint('doctor', __name__)
 
-# =============================================
 # DOCTOR PROFILE
-# =============================================
 
 @doctor_bp.route('/profile', methods=['GET'])
 @jwt_required()
@@ -457,8 +463,8 @@ def get_my_schedules():
 @doctor_bp.route('/schedules', methods=['POST'])
 @jwt_required()
 @doctor_required
-def create_schedule():
-    """Tạo lịch làm việc mới"""
+def create_recurring_schedule(): # <<< TÊN HÀM MỚI
+    """Tạo lịch làm việc định kỳ mới"""
     user_id = get_jwt_identity()
     doctor_id = get_doctor_id_from_user(user_id)
     data = request.get_json()
@@ -467,6 +473,13 @@ def create_schedule():
     if not all(field in data for field in required_fields):
         return jsonify({"msg": "Missing required fields"}), 400
     
+    # 1. Chuyển đổi tên ngày sang số nguyên DB (SỬA Ở ĐÂY)
+    day_name = data['day_of_week']
+    day_int = day_name_to_int(day_name)
+    
+    if day_int is None:
+        return jsonify({"msg": "Invalid day_of_week name in request body"}), 400
+        
     try:
         start_time = datetime.strptime(data['start_time'], '%H:%M').time()
         end_time = datetime.strptime(data['end_time'], '%H:%M').time()
@@ -476,16 +489,17 @@ def create_schedule():
     # Kiểm tra trùng lặp
     existing = DoctorSchedule.query.filter_by(
         doctor_id=doctor_id,
-        day_of_week=data['day_of_week'],
+        day_of_week=day_int, # SỬ DỤNG SỐ NGUYÊN ĐÃ CHUYỂN ĐỔI
         start_time=start_time
     ).first()
     
     if existing:
+        # Lỗi này khớp với lỗi Flutter bạn gặp
         return jsonify({"msg": "Schedule already exists for this time slot"}), 409
     
     new_schedule = DoctorSchedule(
         doctor_id=doctor_id,
-        day_of_week=data['day_of_week'],
+        day_of_week=day_int, # SỬ DỤNG SỐ NGUYÊN ĐÃ CHUYỂN ĐỔI
         start_time=start_time,
         end_time=end_time,
         max_patients=data.get('max_patients', 20),
@@ -496,7 +510,7 @@ def create_schedule():
         db.session.add(new_schedule)
         db.session.commit()
         log_activity(user_id, "CREATE_SCHEDULE", "doctor_schedule", new_schedule.id, 
-                    f"Created schedule for day {data['day_of_week']}")
+                    f"Created schedule for day {day_name}")
         
         return jsonify({
             "msg": "Schedule created successfully",
@@ -504,11 +518,11 @@ def create_schedule():
         }), 201
     except IntegrityError:
         db.session.rollback()
-        return jsonify({"msg": "Schedule conflict"}), 409
+        return jsonify({"msg": "Database conflict (time slot might overlap)"}), 409
     except Exception as e:
         db.session.rollback()
         return jsonify({"msg": f"Error creating schedule: {str(e)}"}), 500
-
+    
 @doctor_bp.route('/schedules/<int:schedule_id>', methods=['DELETE'])
 @jwt_required()
 @doctor_required
@@ -601,7 +615,148 @@ def get_my_leaves():
     
     return jsonify(results), 200
 
-# FOLLOW-UP REMINDERS
+@doctor_bp.route('/schedules', methods=['POST'])
+@jwt_required()
+@doctor_required
+def create_schedule():
+    """Tạo lịch làm việc định kỳ mới"""
+    user_id = get_jwt_identity()
+    doctor_id = get_doctor_id_from_user(user_id)
+    data = request.get_json()
+    
+    required_fields = ['day_of_week', 'start_time', 'end_time']
+    if not all(field in data for field in required_fields):
+        return jsonify({"msg": "Missing required fields"}), 400
+    
+    # 1. Chuyển đổi tên ngày sang số nguyên DB
+    day_int = day_name_to_int(data['day_of_week']) # Sử dụng hàm hỗ trợ
+    if day_int is None:
+        return jsonify({"msg": "Invalid day_of_week name"}), 400
+        
+    try:
+        start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+        end_time = datetime.strptime(data['end_time'], '%H:%M').time()
+    except ValueError:
+        return jsonify({"msg": "Invalid time format. Use HH:MM"}), 400
+    
+    # Kiểm tra ca làm việc đã tồn tại (DB unique constraint)
+    existing = DoctorSchedule.query.filter_by(
+        doctor_id=doctor_id,
+        day_of_week=day_int,
+        start_time=start_time
+    ).first()
+    
+    if existing:
+        return jsonify({"msg": "Schedule already exists for this time slot"}), 409
+    
+    new_schedule = DoctorSchedule(
+        doctor_id=doctor_id,
+        day_of_week=day_int,
+        start_time=start_time,
+        end_time=end_time,
+        max_patients=data.get('max_patients', 20),
+        is_active=data.get('is_active', True)
+    )
+    
+    try:
+        db.session.add(new_schedule)
+        db.session.commit()
+        log_activity(user_id, "CREATE_SCHEDULE", "doctor_schedule", new_schedule.id, 
+                    f"Created schedule for {data['day_of_week']}")
+        
+        return jsonify({
+            "msg": "Schedule created successfully",
+            "schedule_id": new_schedule.id
+        }), 201
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"msg": "Database conflict (time slot might overlap)"}), 409
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"msg": f"Error creating schedule: {str(e)}"}), 500
+    
+    
+@doctor_bp.route('/appointments/<int:appointment_id>/medical-record', methods=['GET'])
+@jwt_required()
+@doctor_required
+def get_medical_record_by_appointment(appointment_id):
+    """
+    Lấy hồ sơ bệnh án theo appointment_id
+    GET /api/doctor/appointments/<appointment_id>/medical-record
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        
+        doctor_id = get_doctor_id_from_user(current_user_id)
+        
+        appointment = Appointment.query.get_or_404(appointment_id)
+        
+        if appointment.doctor_id != doctor_id:
+            return jsonify({'msg': 'Bạn không có quyền xem hồ sơ này'}), 403
+        
+        # Lấy medical record
+        medical_record = MedicalRecord.query.filter_by(
+            appointment_id=appointment_id
+        ).first()
+        
+        if not medical_record:
+            return jsonify({'msg': 'Chưa có hồ sơ bệnh án cho lịch hẹn này'}), 404
+        
+        # Lấy danh sách đơn thuốc
+        prescriptions = Prescription.query.filter_by(
+            medical_record_id=medical_record.id
+        ).all()
+        
+        # Lấy thông tin patient
+        patient = Patient.query.get(medical_record.patient_id)
+        patient_user = patient.user if patient else None
+        
+        # Serialize data
+        record_data = {
+            'id': medical_record.id,
+            'appointment_id': medical_record.appointment_id,
+            'patient_id': medical_record.patient_id,
+            'diagnosis': medical_record.diagnosis,
+            'symptoms': medical_record.symptoms,
+            'treatment': medical_record.treatment,
+            'notes': medical_record.notes,
+            'next_visit_date': medical_record.next_visit_date.isoformat() if medical_record.next_visit_date else None,
+            'is_follow_up': medical_record.is_follow_up,
+            'created_at': medical_record.created_at.isoformat() if medical_record.created_at else None,
+            'updated_at': medical_record.updated_at.isoformat() if medical_record.updated_at else None,
+            
+            # Thông tin bệnh nhân
+            'patient': {
+                'id': patient.id if patient else None,
+                'full_name': patient_user.full_name if patient_user else 'N/A',
+                'patient_code': patient.patient_code if patient else 'N/A',
+                'date_of_birth': patient_user.date_of_birth.isoformat() if patient_user and patient_user.date_of_birth else None,
+                'gender': patient_user.gender if patient_user else 'N/A',
+                'blood_type': patient.blood_type if patient else 'N/A',
+                'phone': patient_user.phone if patient_user else 'N/A',
+            },
+            
+            # Danh sách đơn thuốc
+            'prescriptions': [
+                {
+                    'id': p.id,
+                    'medication_name': p.medication_name,
+                    'dosage': p.dosage,
+                    'frequency': p.frequency,
+                    'duration': p.duration,
+                    'quantity': p.quantity,
+                    'instructions': p.instructions,
+                } for p in prescriptions
+            ]
+        }
+        
+        return jsonify({
+            'msg': 'Lấy hồ sơ bệnh án thành công',
+            'medical_record': record_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'msg': f'Lỗi server: {str(e)}'}), 500
 
 @doctor_bp.route('/follow-up-reminders', methods=['POST'])
 @jwt_required()

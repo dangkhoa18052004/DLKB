@@ -473,7 +473,7 @@ def get_my_reviews():
         results.append({
             'id': review.id,
             'appointment_code': appointment.appointment_code if appointment else 'N/A',
-            'doctor_name': review.doctor.user.full_name if review.doctor else 'N/A',
+            'doctor_name': review.doctor.user.full_name if review.doctor and review.doctor.user else 'N/A',
             'rating': review.rating,
             'service_rating': review.service_rating,
             'facility_rating': review.facility_rating,

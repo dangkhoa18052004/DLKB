@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart'; // <<< THÊM IMPORT
 import '../services/api_service.dart';
+import '../services/auth_service.dart'; // <<< THÊM IMPORT
 import 'auth/change_password_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -16,8 +18,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _isEditing = false;
   String? _errorMessage;
+  String? _userRole; // Thêm biến để lưu vai trò
 
-  // Controllers
+  // Controllers (Giữ nguyên)
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _fullNameController;
   late TextEditingController _phoneController;
@@ -27,6 +30,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _allergiesController;
   late TextEditingController _emergencyContactNameController;
   late TextEditingController _emergencyContactPhoneController;
+  // Doctor specific controllers (Thêm cho Bác sĩ)
+  late TextEditingController _specializationController;
+  late TextEditingController _bioController;
 
   String? _selectedGender;
   DateTime? _dateOfBirth;
@@ -35,7 +41,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _initControllers();
-    _loadProfile();
+    // _loadProfile() sẽ được gọi sau khi context sẵn sàng để lấy AuthService
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfile();
+    });
   }
 
   void _initControllers() {
@@ -47,6 +56,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _allergiesController = TextEditingController();
     _emergencyContactNameController = TextEditingController();
     _emergencyContactPhoneController = TextEditingController();
+    // Khởi tạo controllers cho Bác sĩ
+    _specializationController = TextEditingController();
+    _bioController = TextEditingController();
   }
 
   @override
@@ -59,17 +71,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _allergiesController.dispose();
     _emergencyContactNameController.dispose();
     _emergencyContactPhoneController.dispose();
+    _specializationController.dispose();
+    _bioController.dispose();
     super.dispose();
   }
 
   Future<void> _loadProfile() async {
+    // Lấy thông tin vai trò từ AuthService
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final role = authService.user?['role'] ?? 'patient';
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _userRole = role; // Lưu vai trò
     });
 
     try {
-      final result = await _apiService.getMyProfile();
+      Map<String, dynamic> result;
+
+      if (role == 'doctor') {
+        result = await _apiService.getDoctorProfile();
+      } else {
+        // Bao gồm 'patient' và các vai trò khác mặc định
+        result = await _apiService.getMyProfile();
+      }
 
       if (result['success']) {
         setState(() {
@@ -91,17 +117,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // Trong _ProfileScreenState
   void _populateControllers() {
     if (_profile == null) return;
 
-    final user = _profile!['user'] ?? {};
-    final patient = _profile!['patient'] ?? {};
+    final Map<String, dynamic> user = _profile!['user'] ?? _profile!;
+    final Map<String, dynamic> patient = _profile!['patient'] ?? _profile!;
 
     _fullNameController.text = user['full_name'] ?? '';
     _phoneController.text = user['phone'] ?? '';
     _emailController.text = user['email'] ?? '';
     _addressController.text = user['address'] ?? '';
-    // Normalize backend gender into one of the dropdown values ('Nam','Nữ','Khác')
+
     _selectedGender = _normalizeGenderValue(user['gender']);
 
     if (user['date_of_birth'] != null) {
@@ -110,6 +137,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       } catch (e) {
         _dateOfBirth = null;
       }
+    } else {
+      _dateOfBirth = null;
     }
 
     _bloodTypeController.text = patient['blood_type'] ?? '';
@@ -118,6 +147,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         patient['emergency_contact_name'] ?? '';
     _emergencyContactPhoneController.text =
         patient['emergency_contact_phone'] ?? '';
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -125,6 +158,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isLoading = true);
 
+    // Dữ liệu chung
     final updateData = {
       'full_name': _fullNameController.text.trim(),
       'phone': _phoneController.text.trim(),
@@ -132,14 +166,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'address': _addressController.text.trim(),
       'gender': _selectedGender,
       'date_of_birth': _dateOfBirth?.toIso8601String().split('T')[0],
-      'blood_type': _bloodTypeController.text.trim(),
-      'allergies': _allergiesController.text.trim(),
-      'emergency_contact_name': _emergencyContactNameController.text.trim(),
-      'emergency_contact_phone': _emergencyContactPhoneController.text.trim(),
     };
 
+    // Dữ liệu riêng biệt
+    if (_userRole != 'doctor') {
+      updateData.addAll({
+        'blood_type': _bloodTypeController.text.trim(),
+        'allergies': _allergiesController.text.trim(),
+        'emergency_contact_name': _emergencyContactNameController.text.trim(),
+        'emergency_contact_phone': _emergencyContactPhoneController.text.trim(),
+      });
+    } else {
+      updateData.addAll({
+        'specialization': _specializationController.text.trim(),
+        'bio': _bioController.text.trim(),
+        // Thêm các trường Doctor khác nếu cần (experience_years, consultation_fee...)
+      });
+    }
+
     try {
-      final result = await _apiService.updateMyProfile(updateData);
+      final result = await _apiService.updateMyProfile(
+          updateData); // API này cần xử lý cả Patient và Doctor
 
       if (result['success']) {
         setState(() {
@@ -230,8 +277,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileView() {
     if (_profile == null) return const SizedBox();
 
-    final user = _profile!['user'] ?? {};
-    final patient = _profile!['patient'] ?? {};
+    // Dữ liệu chung
+    final user = (_userRole == 'doctor' ? _profile!['user'] : _profile) ?? {};
+
+    // Dữ liệu riêng biệt
+    final specificInfo =
+        (_userRole == 'doctor' ? _profile!['doctor'] : _profile!['patient']) ??
+            {};
 
     return SingleChildScrollView(
       child: Column(
@@ -309,7 +361,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  patient['patient_code'] ?? 'N/A',
+                  _userRole == 'doctor'
+                      ? specificInfo['specialization'] ?? 'Bác sĩ'
+                      : specificInfo['patient_code'] ?? 'N/A',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.white70,
@@ -340,27 +394,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 const SizedBox(height: 20),
 
-                _buildSectionTitle('Thông tin y tế', Icons.medical_services),
-                _buildInfoCard([
-                  _buildInfoRow(
-                      'Nhóm máu', patient['blood_type'] ?? 'Chưa cập nhật'),
-                  _buildInfoRow('Dị ứng', patient['allergies'] ?? 'Không',
-                      maxLines: 3),
-                  _buildInfoRow(
-                      'Số BHYT', patient['insurance_number'] ?? 'Chưa có'),
-                  _buildInfoRow(
-                      'Đơn vị BH', patient['insurance_provider'] ?? 'Chưa có'),
-                ]),
-
-                const SizedBox(height: 20),
-
-                _buildSectionTitle('Liên hệ khẩn cấp', Icons.emergency),
-                _buildInfoCard([
-                  _buildInfoRow('Người liên hệ',
-                      patient['emergency_contact_name'] ?? 'Chưa cập nhật'),
-                  _buildInfoRow('Số điện thoại',
-                      patient['emergency_contact_phone'] ?? 'Chưa cập nhật'),
-                ]),
+                if (_userRole != 'doctor') // Hiển thị cho Patient
+                  ...[
+                  _buildSectionTitle('Thông tin y tế', Icons.medical_services),
+                  _buildInfoCard([
+                    _buildInfoRow('Nhóm máu',
+                        specificInfo['blood_type'] ?? 'Chưa cập nhật'),
+                    _buildInfoRow(
+                        'Dị ứng', specificInfo['allergies'] ?? 'Không',
+                        maxLines: 3),
+                    _buildInfoRow('Số BHYT',
+                        specificInfo['insurance_number'] ?? 'Chưa có'),
+                    _buildInfoRow('Đơn vị BH',
+                        specificInfo['insurance_provider'] ?? 'Chưa có'),
+                  ]),
+                  const SizedBox(height: 20),
+                  _buildSectionTitle('Liên hệ khẩn cấp', Icons.emergency),
+                  _buildInfoCard([
+                    _buildInfoRow(
+                        'Người liên hệ',
+                        specificInfo['emergency_contact_name'] ??
+                            'Chưa cập nhật'),
+                    _buildInfoRow(
+                        'Số điện thoại',
+                        specificInfo['emergency_contact_phone'] ??
+                            'Chưa cập nhật'),
+                  ]),
+                ] else // Hiển thị cho Doctor
+                  ...[
+                  _buildSectionTitle('Thông tin công việc', Icons.work),
+                  _buildInfoCard([
+                    _buildInfoRow('Chuyên môn',
+                        specificInfo['specialization'] ?? 'Chưa cập nhật'),
+                    _buildInfoRow('Kinh nghiệm',
+                        '${specificInfo['experience_years'] ?? '0'} năm'),
+                    _buildInfoRow('Phí khám',
+                        '${specificInfo['consultation_fee'] ?? '0'} ₫'),
+                    _buildInfoRow(
+                        'Tiểu sử', specificInfo['bio'] ?? 'Chưa cập nhật',
+                        maxLines: 5),
+                  ]),
+                ],
 
                 const SizedBox(height: 20),
 
@@ -414,7 +488,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 16),
 
             DropdownButtonFormField<String>(
-              // Ensure the current value exists in the items; otherwise use null
               value: (['Nam', 'Nữ', 'Khác'].contains(_selectedGender))
                   ? _selectedGender
                   : null,
@@ -508,54 +581,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
 
             const SizedBox(height: 24),
-            _buildSectionTitle('Thông tin y tế', Icons.medical_services),
-            const SizedBox(height: 12),
 
-            TextFormField(
-              controller: _bloodTypeController,
-              decoration: const InputDecoration(
-                labelText: 'Nhóm máu',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.bloodtype),
-                hintText: 'Ví dụ: A+, B-, O+, AB+',
+            // Hiển thị form chỉnh sửa cho Patient/Doctor
+            if (_userRole != 'doctor') // Patient fields
+              ...[
+              _buildSectionTitle('Thông tin y tế', Icons.medical_services),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _bloodTypeController,
+                decoration: const InputDecoration(
+                  labelText: 'Nhóm máu',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.bloodtype),
+                  hintText: 'Ví dụ: A+, B-, O+, AB+',
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _allergiesController,
-              decoration: const InputDecoration(
-                labelText: 'Dị ứng',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.warning_amber),
-                hintText: 'Ví dụ: Penicillin, hải sản...',
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _allergiesController,
+                decoration: const InputDecoration(
+                  labelText: 'Dị ứng',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.warning_amber),
+                  hintText: 'Ví dụ: Penicillin, hải sản...',
+                ),
+                maxLines: 2,
               ),
-              maxLines: 2,
-            ),
-
-            const SizedBox(height: 24),
-            _buildSectionTitle('Liên hệ khẩn cấp', Icons.emergency),
-            const SizedBox(height: 12),
-
-            TextFormField(
-              controller: _emergencyContactNameController,
-              decoration: const InputDecoration(
-                labelText: 'Tên người liên hệ',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person_outline),
+              const SizedBox(height: 24),
+              _buildSectionTitle('Liên hệ khẩn cấp', Icons.emergency),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _emergencyContactNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Tên người liên hệ',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _emergencyContactPhoneController,
-              decoration: const InputDecoration(
-                labelText: 'Số điện thoại',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.phone),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _emergencyContactPhoneController,
+                decoration: const InputDecoration(
+                  labelText: 'Số điện thoại',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.phone),
+                ),
+                keyboardType: TextInputType.phone,
               ),
-              keyboardType: TextInputType.phone,
-            ),
+            ] else // Doctor fields
+              ...[
+              _buildSectionTitle('Thông tin công việc', Icons.work),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _specializationController,
+                decoration: const InputDecoration(
+                  labelText: 'Chuyên môn',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.medical_services),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Vui lòng nhập chuyên môn';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _bioController,
+                decoration: const InputDecoration(
+                  labelText: 'Tiểu sử/Bio',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.info_outline),
+                ),
+                maxLines: 5,
+              ),
+            ],
 
             const SizedBox(height: 32),
 

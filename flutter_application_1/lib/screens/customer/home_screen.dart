@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../admin/dashboard_screen.dart' as admin_dash;
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
@@ -6,7 +8,7 @@ import 'select_department_screen.dart';
 import 'my_appointment_screen.dart';
 import 'medical_history_screen.dart';
 import '../profile_screen.dart';
-import '../admin/dashboard_screen.dart';
+import '../admin/dashboard_screen.dart'; // ĐẢM BẢO IMPORT ĐÚNG
 import '../search_screen.dart';
 import '../notifications_screen.dart';
 import 'feedback_review_screen.dart';
@@ -27,10 +29,13 @@ class HomeScreen extends StatelessWidget {
     switch (userRole) {
       case 'admin':
       case 'staff':
-        bodyContent = const DashboardScreen();
+        // SỬ DỤNG ADMIN ALIAS
+        bodyContent = admin_dash.DashboardScreen();
         break;
       case 'doctor':
-        bodyContent = const DashboardScreen();
+        // NẾU DOCTOR DÙNG CHUNG ADMIN DASHBOARD, SỬ DỤNG ALIAS TƯƠNG TỰ
+        // HOẶC nếu DoctorDashboardScreen đã được import, dùng: bodyContent = const DoctorDashboardScreen();
+        bodyContent = admin_dash.DashboardScreen();
         break;
       case 'patient':
       default:
@@ -71,8 +76,7 @@ class HomeScreen extends StatelessWidget {
       ),
     );
 
-    // Nút Profile chỉ dành cho Patient/Doctor (nếu Doctor có hồ sơ riêng)
-    // Giữ lại cho Doctor/Patient, loại bỏ cho Admin/Staff vì Admin/Staff sử dụng Dashboard
+    // Nút Profile chỉ dành cho Patient/Doctor
     if (userRole == 'patient' || userRole == 'doctor') {
       appBarActions.add(
         IconButton(
@@ -89,7 +93,6 @@ class HomeScreen extends StatelessWidget {
 
     // Nút Logout chung
     appBarActions.add(
-      // Logout
       IconButton(
         icon: const Icon(Icons.logout),
         onPressed: () => _showLogoutDialog(context, authService),
@@ -102,7 +105,7 @@ class HomeScreen extends StatelessWidget {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: appBarActions, // Sử dụng danh sách Actions đã lọc
+        actions: appBarActions,
       ),
       body: bodyContent,
       floatingActionButton: userRole == 'patient'
@@ -112,7 +115,7 @@ class HomeScreen extends StatelessWidget {
               tooltip: 'Tìm kiếm',
               child: const Icon(Icons.search),
             )
-          : null, // Chỉ hiển thị cho Patient
+          : null,
     );
   }
 
@@ -125,7 +128,7 @@ class HomeScreen extends StatelessWidget {
         return 'Bác sĩ - Dashboard';
       case 'patient':
       default:
-        return 'Bệnh viện Nhi Đồng II';
+        return 'Trang chủ';
     }
   }
 
@@ -161,12 +164,8 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// ============================================
-// PATIENT HOME CONTENT
-// ... (Không thay đổi)
-// ============================================
+// Phần còn lại của PatientHomeContent giữ nguyên...
 class PatientHomeContent extends StatefulWidget {
-// ... (Phần còn lại của PatientHomeContent không thay đổi)
   final String userName;
   const PatientHomeContent({super.key, required this.userName});
 
@@ -217,6 +216,21 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Tiêu đề bệnh viện
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+              child: Text(
+                'Bệnh viện Nhi Đồng II',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
             // Welcome Banner
             _buildWelcomeBanner(),
 
@@ -250,6 +264,7 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
   Widget _buildWelcomeBanner() {
     return Container(
       width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -262,8 +277,9 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(12),
       ),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -279,7 +295,7 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
             widget.userName,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 28,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -497,7 +513,6 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
                   Icons.payment,
                   Colors.teal,
                   () {
-                    // SỬA: Điều hướng đến màn hình Lịch sử Thanh toán
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -513,7 +528,6 @@ class _PatientHomeContentState extends State<PatientHomeContent> {
                   Icons.feedback,
                   Colors.red,
                   () {
-                    // SỬA: Thay thế SnackBar bằng điều hướng đến FeedbackReviewScreen
                     Navigator.push(
                       context,
                       MaterialPageRoute(

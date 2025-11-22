@@ -1,5 +1,7 @@
 // dashboard_screen.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
 import 'admin_user_management_screen.dart';
 import 'admin_reports_screen.dart';
@@ -7,7 +9,6 @@ import 'admin_notifications_screen.dart';
 import 'admin_appointments_screen.dart';
 import 'admin_services_screen.dart';
 import 'admin_doctors_screen.dart';
-// THÊM IMPORT CHO 2 MÀN HÌNH MỚI
 import 'admin_payment_management_screen.dart';
 import 'admin_review_feedback_screen.dart';
 
@@ -35,7 +36,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _errorMessage = null;
     });
 
-    // Giả sử ApiService đã được import và có method getDashboardOverview
     final result = await ApiService().getDashboardOverview();
 
     if (!mounted) return;
@@ -53,13 +53,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Navigate và refresh khi quay lại
+  void _showLogoutDialog(BuildContext context, AuthService authService) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Xác nhận đăng xuất'),
+          content: const Text('Bạn có chắc chắn muốn đăng xuất?'),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Hủy'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                authService.logout();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Đăng xuất'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _navigateAndRefresh(Widget screen) async {
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => screen),
     );
-    // Refresh data khi quay lại
     if (mounted) {
       _loadDashboardData();
     }
@@ -76,6 +105,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -109,167 +140,198 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final appointments = data['appointments'];
     final revenue = data['revenue'];
 
-    // CHỈNH SỬA: Loại bỏ AppBar để tránh trùng lặp nếu được nhúng vào Scaffold khác
+    // 🛑 ĐÃ THÊM SAFEAREAD VÀO ĐÂY
     return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: _loadDashboardData,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header (Đã loại bỏ AppBar, thêm Row để giữ nút refresh và tiêu đề)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Tổng quan hôm nay',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontSize: 20,
-                        ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Nút Thông báo
-                      IconButton(
-                        icon: const Icon(Icons.notifications_none),
-                        onPressed: () {
-                          _navigateAndRefresh(const AdminNotificationsScreen());
-                        },
-                      ),
-                      // NÚT ĐĂNG XUẤT ĐÃ BỊ XÓA (Icons.logout)
-
-                      // Nút Refresh
-                      IconButton(
-                        onPressed: _loadDashboardData,
-                        icon: const Icon(Icons.refresh),
-                        tooltip: 'Làm mới',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Responsive Grid
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  // ĐẢM BẢO 2 CỘT TRÊN ĐIỆN THOẠI
-                  int crossAxisCount = 2;
-
-                  if (constraints.maxWidth > 800) {
-                    crossAxisCount = 4;
-                  } else if (constraints.maxWidth > 500) {
-                    crossAxisCount = 3;
-                  }
-                  // Giữ crossAxisCount = 2 cho màn hình nhỏ hơn 500
-
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                      childAspectRatio: 1.0, // ĐÃ CHỈNH: Tỷ lệ khung 1.0
+      body: SafeArea(
+        // Bọc toàn bộ nội dung trong SafeArea
+        child: RefreshIndicator(
+          onRefresh: _loadDashboardData,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header (Thay thế AppBar)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Tổng quan hôm nay',
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontSize: 20,
+                              ),
                     ),
-                    itemCount: 4,
-                    itemBuilder: (context, index) {
-                      switch (index) {
-                        case 0:
-                          return _buildStatCard(
-                            context,
-                            'Bệnh nhân',
-                            patients['total'].toString(),
-                            Icons.people,
-                            Colors.blue.shade100,
-                            'Mới: ${patients['new_this_month']}',
-                          );
-                        case 1:
-                          return _buildStatCard(
-                            context,
-                            'Bác sĩ',
-                            doctors['total'].toString(),
-                            Icons.medication,
-                            Colors.green.shade100,
-                            'Đang hoạt động',
-                          );
-                        case 2:
-                          return _buildStatCard(
-                            context,
-                            'Lịch hẹn TQ',
-                            appointments['total'].toString(),
-                            Icons.calendar_today,
-                            Colors.orange.shade100,
-                            'Hôm nay: ${appointments['today']}',
-                          );
-                        case 3:
-                          return _buildStatCard(
-                            context,
-                            'Doanh thu T.',
-                            '${_formatNumber(revenue['this_month'])} ₫',
-                            Icons.monetization_on,
-                            Colors.red.shade100,
-                            'Tháng trước: ${revenue['change_percent']}%',
-                          );
-                        default:
-                          return Container();
-                      }
-                    },
-                  );
-                },
-              ),
-              const SizedBox(height: 32),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Nút Thông báo với badge
+                        IconButton(
+                          icon: Stack(
+                            children: [
+                              const Icon(Icons.notifications_outlined),
+                              Positioned(
+                                right: 0,
+                                top: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 12,
+                                    minHeight: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          onPressed: () {
+                            _navigateAndRefresh(
+                                const AdminNotificationsScreen());
+                          },
+                        ),
+                        // IconButton(
+                        //   icon: const Icon(Icons.account_circle),
+                        //   onPressed: () {
+                        //   },
+                        // ),
+                        // Nút Refresh
+                        IconButton(
+                          onPressed: _loadDashboardData,
+                          icon: const Icon(Icons.refresh),
+                          tooltip: 'Làm mới',
+                        ),
+                        // Nút Đăng xuất
+                        IconButton(
+                          icon: const Icon(Icons.logout),
+                          onPressed: () =>
+                              _showLogoutDialog(context, authService),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
 
-              // === QUẢN LÝ ===
-              Text('Quản lý', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
+                // Responsive Grid
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    int crossAxisCount = 2;
 
-              ..._buildManagementButtons(),
+                    if (constraints.maxWidth > 800) {
+                      crossAxisCount = 4;
+                    } else if (constraints.maxWidth > 500) {
+                      crossAxisCount = 3;
+                    }
 
-              const SizedBox(height: 32),
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1.0,
+                      ),
+                      itemCount: 4,
+                      itemBuilder: (context, index) {
+                        switch (index) {
+                          case 0:
+                            return _buildStatCard(
+                              context,
+                              'Bệnh nhân',
+                              patients['total'].toString(),
+                              Icons.people,
+                              Colors.blue.shade100,
+                              'Mới: ${patients['new_this_month']}',
+                            );
+                          case 1:
+                            return _buildStatCard(
+                              context,
+                              'Bác sĩ',
+                              doctors['total'].toString(),
+                              Icons.medication,
+                              Colors.green.shade100,
+                              'Đang hoạt động',
+                            );
+                          case 2:
+                            return _buildStatCard(
+                              context,
+                              'Lịch hẹn TQ',
+                              appointments['total'].toString(),
+                              Icons.calendar_today,
+                              Colors.orange.shade100,
+                              'Hôm nay: ${appointments['today']}',
+                            );
+                          case 3:
+                            return _buildStatCard(
+                              context,
+                              'Doanh thu T.',
+                              '${_formatNumber(revenue['this_month'])} ₫',
+                              Icons.monetization_on,
+                              Colors.red.shade100,
+                              'Tháng trước: ${revenue['change_percent']}%',
+                            );
+                          default:
+                            return Container();
+                        }
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 32),
 
-              // === LỊCH HẸN ĐANG CHỜ ===
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Lịch hẹn đang chờ xử lý',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      _navigateAndRefresh(const AdminAppointmentsScreen());
-                    },
-                    child: const Text('Xem tất cả'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
+                // === QUẢN LÝ ===
+                Text('Quản lý', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 12),
 
-              InkWell(
-                onTap: () {
-                  _navigateAndRefresh(const AdminAppointmentsScreen());
-                },
-                child: Card(
-                  child: ListTile(
-                    leading:
-                        const Icon(Icons.access_time, color: Colors.orange),
-                    title: const Text('Tổng số lịch hẹn đang chờ duyệt'),
-                    trailing: Text(
-                      appointments['pending'].toString(),
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(color: Colors.orange, fontSize: 18),
+                ..._buildManagementButtons(),
+
+                const SizedBox(height: 32),
+
+                // === LỊCH HẸN ĐANG CHỜ ===
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Lịch hẹn đang chờ xử lý',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        _navigateAndRefresh(const AdminAppointmentsScreen());
+                      },
+                      child: const Text('Xem tất cả'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                InkWell(
+                  onTap: () {
+                    _navigateAndRefresh(const AdminAppointmentsScreen());
+                  },
+                  child: Card(
+                    child: ListTile(
+                      leading:
+                          const Icon(Icons.access_time, color: Colors.orange),
+                      title: const Text('Tổng số lịch hẹn đang chờ duyệt'),
+                      trailing: Text(
+                        appointments['pending'].toString(),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(color: Colors.orange, fontSize: 18),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
@@ -303,7 +365,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'color': Colors.purple,
         'screen': const AdminUserManagementScreen(),
       },
-      // THÊM 2 NÚT MỚI TẠI ĐÂY
       {
         'title': 'Quản lý Thanh Toán',
         'icon': Icons.payment,
@@ -316,7 +377,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'color': Colors.indigo,
         'screen': const AdminReviewFeedbackScreen(),
       },
-      // KẾT THÚC 2 NÚT MỚI
       {
         'title': 'Quản lý Thông báo',
         'icon': Icons.notifications_active,

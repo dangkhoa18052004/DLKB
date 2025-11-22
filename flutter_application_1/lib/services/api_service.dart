@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.100.151:5000/api';
+  static const String baseUrl = 'http://10.0.2.2:5000/api';
 
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -18,7 +18,24 @@ class ApiService {
   Future<void> deleteToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
+    await prefs.remove('user_data'); // <<< XÓA USER DATA KHI ĐĂNG XUẤT
   }
+
+  // === BỔ SUNG: LƯU VÀ TẢI USER DATA ===
+  Future<void> saveUser(Map<String, dynamic> userData) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_data', jsonEncode(userData));
+  }
+
+  Future<Map<String, dynamic>?> getUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString('user_data');
+    if (data != null) {
+      return jsonDecode(data);
+    }
+    return null;
+  }
+  // ======================================
 
   Future<Map<String, String>> getHeaders() async {
     final token = await getToken();
@@ -144,6 +161,7 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         await saveToken(data['access_token']);
+        await saveUser(data['user']); // <<< LƯU USER DATA
         return {'success': true, 'data': data};
       } else {
         return {'success': false, 'error': jsonDecode(response.body)['msg']};
@@ -229,7 +247,6 @@ class ApiService {
 
   Future<Map<String, dynamic>> rescheduleAppointment(
       int appointmentId, String newDate, String newTime) async {
-    // Sử dụng put mới
     return await put('/patient/appointments/$appointmentId/reschedule', {
       'new_date': newDate,
       'new_time': newTime,
@@ -265,7 +282,6 @@ class ApiService {
 
   Future<Map<String, dynamic>> markNotificationAsRead(
       int notificationId) async {
-    // PUT thường không cần body, nhưng put() của chúng ta yêu cầu Map. Gửi Map rỗng
     return await put('/notifications/$notificationId/read', {});
   }
 
@@ -570,10 +586,6 @@ class ApiService {
     String endpoint = '/doctor/appointments?page=$page&per_page=$perPage';
     if (date != null) endpoint += '&date=$date';
     if (status != null) endpoint += '&status=$status';
-
-    // Lưu ý: Hàm này thay thế cho getMyAppointments() nếu user là Doctor.
-    // Nếu getMyAppointments() được dùng chung, cần thay thế nó hoặc tạo mới.
-    // Tôi tạo hàm mới rõ ràng hơn để tránh nhầm lẫn.
     final result = await _sendRequest('GET', endpoint, null);
 
     // Hàm này trả về object có key 'appointments', cần trích xuất nếu cần
@@ -608,6 +620,13 @@ class ApiService {
       Map<String, dynamic> reminderData) async {
     // POST /doctor/follow-up-reminders
     return await post('/doctor/follow-up-reminders', reminderData);
+  }
+
+  Future<Map<String, dynamic>> getMedicalRecordByAppointment(
+      int appointmentId) async {
+    // GET /doctor/appointments/<appointment_id>/medical-record
+    return await _sendRequest(
+        'GET', '/doctor/appointments/$appointmentId/medical-record', null);
   }
 
   // ===================================

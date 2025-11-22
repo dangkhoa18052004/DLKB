@@ -17,12 +17,21 @@ class AuthService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
 
+  // 🛑 SỬA LỖI: KHÔI PHỤC THÔNG TIN USER (ROLE) VÀ XỬ LÝ TOKEN MẤT ĐỒNG BỘ
   Future<void> init() async {
     final token = await _apiService.getToken();
-    if (token != null) {
+    final userData = await _apiService.getUserData(); // Lấy user data đã lưu
+
+    if (token != null && userData != null) {
       _isAuthenticated = true;
-      _user = {'full_name': 'Người Dùng', 'role': 'patient'};
+      _user = userData; // Khôi phục thông tin người dùng và vai trò
+    } else {
+      // Nếu có token mà thiếu user data (hoặc ngược lại), xóa hết để đảm bảo sạch sẽ
+      // Điều này ngăn lỗi khi profile cố gắng tải với token cũ nhưng thiếu role
+      await _apiService.deleteToken();
+      _isAuthenticated = false;
     }
+
     _isInitialized = true;
     notifyListeners();
   }
@@ -38,7 +47,10 @@ class AuthService extends ChangeNotifier {
 
       if (result['success']) {
         _isAuthenticated = true;
-        _user = result['data']['user'];
+        _user = result['data']['user']; // Lấy user data từ kết quả login
+
+        // 🛑 LƯU Ý: Phải đảm bảo ApiService.login đã gọi saveUser(user)
+
         _error = null;
         _isLoading = false;
         notifyListeners();
@@ -59,10 +71,10 @@ class AuthService extends ChangeNotifier {
 
   // Logout
   Future<void> logout() async {
-    await _apiService.logout();
+    await _apiService.logout(); // Gọi deleteToken() (cũng xóa user_data)
     _isAuthenticated = false;
     _user = null;
-    notifyListeners();
+    notifyListeners(); // Kích hoạt HospitalBookingApp chuyển về LoginScreen
   }
 
   // Clear error

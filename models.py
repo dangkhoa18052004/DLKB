@@ -304,6 +304,11 @@ class Review(db.Model):
     approved_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    doctor = db.relationship("Doctor", backref="reviews") 
+    patient = db.relationship("Patient", backref="patient_reviews") 
+    appointment = db.relationship("Appointment", backref="review_info") 
+    approver = db.relationship("User", foreign_keys=[approved_by], backref="approved_reviews")
+
 
     __table_args__ = (
         CheckConstraint(rating.between(1, 5), name='check_rating_range'),

@@ -40,7 +40,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       _errorMessage = null;
     });
 
-    final result = await _apiService.getMyProfile(); // Dùng API có sẵn
+    final result = await _apiService.getDoctorProfile(); // Dùng API có sẵn
 
     if (!mounted) return;
 

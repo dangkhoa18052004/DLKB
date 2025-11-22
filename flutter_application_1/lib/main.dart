@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'screens/auth/login_screen.dart'; // Đã thêm
-import 'screens/customer/home_screen.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/customer/home_screen.dart' as customer;
+import 'screens/doctor/doctor_dashboard_screen.dart';
+import 'screens/admin/dashboard_screen.dart' as admin;
 import 'services/auth_service.dart';
 import 'services/api_service.dart';
 
@@ -30,6 +32,23 @@ void main() async {
 
 class HospitalBookingApp extends StatelessWidget {
   const HospitalBookingApp({super.key});
+
+  // ✅ HÀM ĐIỀU HƯỚNG THEO ROLE - SỬ DỤNG ALIAS
+  Widget _getHomeScreenByRole(String role) {
+    switch (role) {
+      case 'admin':
+        // Sử dụng ALIAS: admin.DashboardScreen()
+        // Đã bỏ const vì DashboardScreen có thể không có const constructor
+        return admin.DashboardScreen();
+      case 'doctor':
+        // Giả sử DoctorDashboardScreen là class duy nhất và được import đúng
+        return const DoctorDashboardScreen();
+      case 'patient':
+      default:
+        // Sử dụng ALIAS: customer.HomeScreen()
+        return const customer.HomeScreen();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +80,9 @@ class HospitalBookingApp extends StatelessWidget {
           }
 
           if (authService.isAuthenticated) {
-            return const HomeScreen();
+            // ✅ LẤY ROLE VÀ ĐIỀU HƯỚNG
+            final userRole = authService.user?['role'] ?? 'patient';
+            return _getHomeScreenByRole(userRole);
           } else {
             return const LoginScreen();
           }
