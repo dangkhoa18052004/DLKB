@@ -37,6 +37,9 @@ def get_my_doctor_profile():
             'full_name': user.full_name,
             'email': user.email,
             'phone': user.phone,
+            'date_of_birth': user.date_of_birth.strftime('%Y-%m-%d') if user.date_of_birth else None,  # ✅ THÊM
+            'gender': user.gender,  # ✅ THÊM
+            'address': user.address,  # ✅ THÊM
             'avatar_url': user.avatar_url
         },
         'doctor': {
@@ -55,6 +58,10 @@ def get_my_doctor_profile():
         }
     }
     
+    # ✅ DEBUG LOG
+    from flask import current_app
+    current_app.logger.debug(f"Doctor Profile Response: {profile_data}")
+    
     return jsonify(profile_data), 200
 
 @doctor_bp.route('/profile', methods=['PUT'])
@@ -63,12 +70,45 @@ def get_my_doctor_profile():
 def update_my_doctor_profile():
     """Cập nhật thông tin profile bác sĩ"""
     user_id = get_jwt_identity()
+    user = User.query.get_or_404(user_id)
     doctor = Doctor.query.filter_by(user_id=user_id).first()
     
     if not doctor:
         return jsonify({"msg": "Doctor data not found"}), 404
     
     data = request.get_json()
+    
+    # ✅ DEBUG LOG
+    from flask import current_app
+    current_app.logger.debug(f"Update Doctor Profile - user_id={user_id}, payload={data}")
+    
+    # Cập nhật User info
+    if 'full_name' in data:
+        user.full_name = data['full_name']
+    if 'phone' in data:
+        user.phone = data['phone']
+    if 'email' in data:
+        user.email = data['email']
+    if 'date_of_birth' in data:
+        user.date_of_birth = datetime.strptime(data['date_of_birth'], '%Y-%m-%d').date()
+    if 'gender' in data:
+        raw_gender = data.get('gender')
+        if isinstance(raw_gender, str):
+            g = raw_gender.strip().lower()
+            if g in ('male', 'm', 'nam', 'man'):
+                user.gender = 'Nam'
+            elif g in ('female', 'f', 'nu', 'nữ', 'woman'):
+                user.gender = 'Nữ'
+            elif g in ('other', 'khac', 'khác'):
+                user.gender = 'Khác'
+            else:
+                user.gender = raw_gender.strip().title()
+        else:
+            user.gender = raw_gender
+    if 'address' in data:
+        user.address = data['address']
+    if 'avatar_url' in data:
+        user.avatar_url = data['avatar_url']
     
     # Cập nhật Doctor info
     if 'specialization' in data:
@@ -86,18 +126,36 @@ def update_my_doctor_profile():
     if 'is_available' in data:
         doctor.is_available = data['is_available']
     
+    # Kiểm tra trùng email/phone
+    new_email = data.get('email', user.email)
+    new_phone = data.get('phone', user.phone)
+
+    conflict = User.query.filter(
+        ((User.email == new_email) | (User.phone == new_phone)),
+        User.id != user_id
+    ).first()
+
+    if conflict:
+        if conflict.email == new_email:
+            return jsonify({"msg": "Email already exists"}), 409
+        if conflict.phone == new_phone:
+            return jsonify({"msg": "Phone already exists"}), 409
+    
     try:
         db.session.commit()
+        current_app.logger.debug(f"✅ Doctor profile updated successfully - user_id={user_id}")
         log_activity(user_id, "UPDATE_DOCTOR_PROFILE", "doctor", doctor.id, "Updated doctor profile")
         return jsonify({"msg": "Profile updated successfully"}), 200
+    except IntegrityError as ie:
+        db.session.rollback()
+        current_app.logger.exception(f"❌ IntegrityError updating doctor profile - user_id={user_id}")
+        return jsonify({"msg": f"Integrity error: {str(ie.orig) if hasattr(ie, 'orig') else str(ie)}"}), 409
     except Exception as e:
         db.session.rollback()
+        current_app.logger.exception(f"❌ Error updating doctor profile - user_id={user_id}")
         return jsonify({"msg": f"Error updating profile: {str(e)}"}), 500
-
-# =============================================
+    
 # APPOINTMENTS MANAGEMENT
-# =============================================
-
 @doctor_bp.route('/appointments', methods=['GET'])
 @jwt_required()
 @doctor_required

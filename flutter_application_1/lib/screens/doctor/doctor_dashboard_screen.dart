@@ -8,8 +8,10 @@ import 'package:hospital_admin_app/screens/profile_screen.dart';
 import 'doctor_appointment_list_screen.dart';
 import 'doctor_profile_screen.dart';
 
-// <<< THÊM IMPORT CHO MÀN HÌNH TẠO CA LÀM VIỆC MỚI >>>
+// ✅ IMPORT CÁC MÀN HÌNH MỚI
 import 'register_schedule_screen.dart';
+import 'doctor_schedule_management_screen.dart';
+import 'doctor_stats_screen.dart';
 
 class DoctorDashboardScreen extends StatefulWidget {
   const DoctorDashboardScreen({super.key});
@@ -147,12 +149,10 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       appBar: AppBar(
         title: const Text('Bác sĩ - Dashboard'),
         actions: [
-          // Nút Refresh
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadDashboardData,
           ),
-          // Nút Thông báo
           IconButton(
             icon: Stack(
               children: [
@@ -182,7 +182,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
               );
             },
           ),
-          // Nút Trang cá nhân
           IconButton(
             icon: const Icon(Icons.account_circle),
             onPressed: () {
@@ -192,7 +191,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
               );
             },
           ),
-          // Nút Đăng xuất
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _showLogoutDialog,
@@ -390,61 +388,84 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 const SizedBox(height: 12),
 
                 // Rating Card
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    leading: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.star, color: Colors.amber),
-                    ),
-                    title: const Text('Đánh giá trung bình',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: _buildRatingStars(currentRating),
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          currentRating.toStringAsFixed(1),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 24,
-                            color: Colors.amber,
-                          ),
-                        ),
-                        const Text('/ 5.0',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
+                // Card(
+                //   elevation: 2,
+                //   shape: RoundedRectangleBorder(
+                //     borderRadius: BorderRadius.circular(12),
+                //   ),
+                //   child: ListTile(
+                //     contentPadding: const EdgeInsets.all(16),
+                //     leading: Container(
+                //       padding: const EdgeInsets.all(12),
+                //       decoration: BoxDecoration(
+                //         color: Colors.amber.shade50,
+                //         borderRadius: BorderRadius.circular(12),
+                //       ),
+                //       child: const Icon(Icons.star, color: Colors.amber),
+                //     ),
+                //     // title: const Text('Đánh giá trung bình',
+                //     //     style: TextStyle(fontWeight: FontWeight.bold)),
+                //     // subtitle: Padding(
+                //     //   padding: const EdgeInsets.only(top: 8),
+                //     //   child: _buildRatingStars(currentRating),
+                //     // ),
+                //     trailing: Column(
+                //       mainAxisAlignment: MainAxisAlignment.center,
+                //       crossAxisAlignment: CrossAxisAlignment.end,
+                //       children: [
+                //         Text(
+                //           currentRating.toStringAsFixed(1),
+                //           style: const TextStyle(
+                //             fontWeight: FontWeight.bold,
+                //             fontSize: 24,
+                //             color: Colors.amber,
+                //           ),
+                //         ),
+                //         const Text('/ 5.0',
+                //             style: TextStyle(fontSize: 12, color: Colors.grey)),
+                //       ],
+                //     ),
+                //   ),
+                // ),
+                // const SizedBox(height: 12),
 
-                // Quick Actions
-                // <<< NÚT TẠO CA LÀM VIỆC MỚI ĐƯỢC THÊM TẠI ĐÂY >>>
+                // ✅ QUICK ACTIONS - ĐÂY LÀ CHỖ THÊM NÚT
+                // VỊ TRÍ 1: Thống kê cá nhân (mới)
                 _buildActionButton(
                   context,
-                  title: 'Tạo Ca Làm Việc Mới',
-                  subtitle: 'Đăng ký lịch làm việc (giờ/ngày) cho bạn',
-                  icon: Icons.access_time_filled,
-                  color: Colors.pink,
-                  onTap: () =>
-                      _navigateAndRefresh(const RegisterScheduleScreen()),
+                  title: 'Thống kê Cá nhân',
+                  subtitle: 'Xem hiệu suất và biểu đồ của bạn',
+                  icon: Icons.bar_chart,
+                  color: Colors.indigo,
+                  onTap: () => _navigateAndRefresh(const DoctorStatsScreen()),
                 ),
                 const SizedBox(height: 8),
-                // <<< KẾT THÚC NÚT TẠO CA LÀM VIỆC MỚI >>>
 
+                // VỊ TRÍ 2: Quản lý lịch làm việc (mới)
+                _buildActionButton(
+                  context,
+                  title: 'Quản lý Lịch làm việc',
+                  subtitle: 'Xem, sửa lịch định kỳ và đăng ký nghỉ phép',
+                  icon: Icons.calendar_month,
+                  color: Colors.teal,
+                  onTap: () => _navigateAndRefresh(
+                      const DoctorScheduleManagementScreen()),
+                ),
+                const SizedBox(height: 8),
+
+                // VỊ TRÍ 3: Tạo ca mới (đã có từ trước)
+                // _buildActionButton(
+                //   context,
+                //   title: 'Tạo Ca Làm Việc Mới',
+                //   subtitle: 'Đăng ký lịch làm việc (giờ/ngày) cho bạn',
+                //   icon: Icons.access_time_filled,
+                //   color: Colors.pink,
+                //   onTap: () =>
+                //       _navigateAndRefresh(const RegisterScheduleScreen()),
+                // ),
+                // const SizedBox(height: 8),
+
+                // VỊ TRÍ 4: Quản lý lịch hẹn (đã có từ trước)
                 _buildActionButton(
                   context,
                   title: 'Quản lý Lịch hẹn',
@@ -455,6 +476,8 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                       _navigateAndRefresh(const DoctorAppointmentListScreen()),
                 ),
                 const SizedBox(height: 8),
+
+                // VỊ TRÍ 5: Hồ sơ cá nhân (đã có từ trước)
                 _buildActionButton(
                   context,
                   title: 'Hồ sơ cá nhân & Lịch',

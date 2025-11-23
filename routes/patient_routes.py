@@ -271,7 +271,7 @@ def get_my_medical_records():
             'id': record.id,
             'record_code': record.record_code,
             'visit_date': record.visit_date.strftime('%Y-%m-%d %H:%M'),
-            'doctor_name': record.doctor.user.full_name if record.doctor else 'N/A',
+            'doctor_name': record.appointment.doctor.user.full_name if record.appointment and record.appointment.doctor else 'N/A',
             'diagnosis': record.diagnosis,
             'symptoms': record.symptoms,
             'treatment': record.treatment,

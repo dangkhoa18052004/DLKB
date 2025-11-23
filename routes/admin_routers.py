@@ -837,7 +837,7 @@ def get_all_feedback():
     for feedback in pagination.items:
         results.append({
             'id': feedback.id,
-            'user_name': feedback.user.full_name if feedback.user else 'Anonymous',
+            'user_name': feedback.patient.user.full_name if feedback.patient else 'Anonymous',
             'type': feedback.type,
             'subject': feedback.subject,
             'message': feedback.message,

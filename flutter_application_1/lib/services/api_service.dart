@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://10.0.2.2:5000/api';
+  static const String baseUrl = 'http://192.168.100.151:5000/api';
 
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -614,6 +614,131 @@ class ApiService {
       Map<String, dynamic> prescriptionsData) async {
     // POST /doctor/prescriptions/bulk
     return await post('/doctor/prescriptions/bulk', prescriptionsData);
+  }
+
+  Future<Map<String, dynamic>> getDoctorSchedules() async {
+    // GET /doctor/schedules
+    return await _sendRequest('GET', '/doctor/schedules', null);
+  }
+
+  Future<Map<String, dynamic>> createDoctorSchedule(
+      Map<String, dynamic> scheduleData) async {
+    // POST /doctor/schedules
+    return await post('/doctor/schedules', scheduleData);
+  }
+
+  Future<Map<String, dynamic>> deleteDoctorSchedule(int scheduleId) async {
+    // DELETE /doctor/schedules/<id>
+    return await delete('/doctor/schedules/$scheduleId');
+  }
+
+  Future<Map<String, dynamic>> getDoctorLeaves() async {
+    // GET /doctor/leaves
+    return await _sendRequest('GET', '/doctor/leaves', null);
+  }
+
+  Future<Map<String, dynamic>> createDoctorLeave(
+      Map<String, dynamic> leaveData) async {
+    // POST /doctor/leaves
+    return await post('/doctor/leaves', leaveData);
+  }
+
+  Future<Map<String, dynamic>> deleteDoctorLeave(int leaveId) async {
+    // DELETE /doctor/leaves/<id>
+    return await delete('/doctor/leaves/$leaveId');
+  }
+
+// === DOCTOR STATISTICS ===
+
+  Future<Map<String, dynamic>> getDoctorPersonalStats({
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    String endpoint = '/doctor/appointments';
+    List<String> params = [];
+
+    if (dateFrom != null) params.add('date_from=$dateFrom');
+    if (dateTo != null) params.add('date_to=$dateTo');
+
+    if (params.isNotEmpty) {
+      endpoint += '?${params.join('&')}';
+    }
+
+    return await _sendRequest('GET', endpoint, null);
+  }
+
+// === DOCTOR PATIENTS LIST ===
+
+  Future<Map<String, dynamic>> getDoctorPatientsList({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    // Lấy danh sách bệnh nhân đã khám thông qua appointments
+    final result = await _sendRequest(
+        'GET', '/doctor/appointments?page=$page&per_page=$perPage', null);
+
+    if (result['success']) {
+      // Trích xuất danh sách bệnh nhân unique
+      final appointments = result['data']['appointments'] as List;
+      final Map<int, Map<String, dynamic>> uniquePatients = {};
+
+      for (var appt in appointments) {
+        if (appt['patient_id'] != null &&
+            !uniquePatients.containsKey(appt['patient_id'])) {
+          uniquePatients[appt['patient_id']] = {
+            'patient_id': appt['patient_id'],
+            'patient_name': appt['patient_name'],
+            'patient_phone': appt['patient_phone'],
+            'patient_code': appt['patient_code'],
+            'last_visit': appt['appointment_date'],
+          };
+        }
+      }
+
+      return {
+        'success': true,
+        'data': uniquePatients.values.toList(),
+      };
+    }
+
+    return result;
+  }
+
+// === DOCTOR MEDICAL RECORDS HISTORY ===
+
+  Future<Map<String, dynamic>> getDoctorMedicalRecordsHistory({
+    int? patientId,
+    String? dateFrom,
+    String? dateTo,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    // Lấy lịch sử hồ sơ bệnh án của bác sĩ
+    String endpoint = '/doctor/appointments?page=$page&per_page=$perPage';
+    List<String> params = ['status=completed'];
+
+    if (patientId != null) params.add('patient_id=$patientId');
+    if (dateFrom != null) params.add('date_from=$dateFrom');
+    if (dateTo != null) params.add('date_to=$dateTo');
+
+    endpoint += '&${params.join('&')}';
+
+    return await _sendRequest('GET', endpoint, null);
+  }
+
+// === HELPER METHOD (Nếu chưa có) ===
+
+  Future<Map<String, dynamic>> get(
+      String endpoint, Map<String, dynamic> params) async {
+    // Build query string from params
+    if (params.isNotEmpty) {
+      final queryString = params.entries
+          .map((e) =>
+              '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value.toString())}')
+          .join('&');
+      endpoint = '$endpoint?$queryString';
+    }
+    return await _sendRequest('GET', endpoint, null);
   }
 
   Future<Map<String, dynamic>> createFollowUpReminder(

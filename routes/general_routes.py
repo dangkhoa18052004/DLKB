@@ -1,3 +1,4 @@
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Feedback, Review, Appointment
@@ -36,7 +37,6 @@ def submit_feedback():
 @general_bp.route('/reviews', methods=['POST'])
 @jwt_required()
 def submit_review():
-    # ... (Giữ nguyên logic gửi đánh giá từ app.py)
     user_id = get_jwt_identity()
     patient_id = get_patient_id_from_user(user_id)
     data = request.get_json()
@@ -62,14 +62,17 @@ def submit_review():
         service_rating=data['service_rating'],
         facility_rating=data['facility_rating'],
         comment=data.get('comment'),
-        is_anonymous=data.get('is_anonymous', False)
+        is_anonymous=data.get('is_anonymous', False),
+        is_approved=True,  # ✅ TỰ ĐỘNG DUYỆT
+        approved_by=user_id,  # ✅ GHI NHẬN LÀ TỰ ĐỘNG DUYỆT
+        approved_at=datetime.utcnow()  # ✅ THỜI GIAN DUYỆT
     )
 
     try:
         db.session.add(new_review)
         db.session.commit()
-        log_activity(user_id, "SUBMIT_REVIEW", "review", new_review.id, f"Submitted review for AP ID: {appointment_id}")
-        return jsonify({"msg": "Review submitted successfully", "review_id": new_review.id}), 201
+        log_activity(user_id, "SUBMIT_REVIEW", "review", new_review.id, f"Submitted and auto-approved review for AP ID: {appointment_id}")
+        return jsonify({"msg": "Review submitted and approved successfully", "review_id": new_review.id}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"msg": f"Error submitting review: {str(e)}"}), 500

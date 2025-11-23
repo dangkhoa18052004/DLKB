@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart'; // <<< THÊM IMPORT
+import 'package:provider/provider.dart';
 import '../services/api_service.dart';
-import '../services/auth_service.dart'; // <<< THÊM IMPORT
+import '../services/auth_service.dart';
 import 'auth/change_password_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -18,9 +18,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   bool _isEditing = false;
   String? _errorMessage;
-  String? _userRole; // Thêm biến để lưu vai trò
+  String? _userRole;
 
-  // Controllers (Giữ nguyên)
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _fullNameController;
   late TextEditingController _phoneController;
@@ -30,7 +29,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _allergiesController;
   late TextEditingController _emergencyContactNameController;
   late TextEditingController _emergencyContactPhoneController;
-  // Doctor specific controllers (Thêm cho Bác sĩ)
   late TextEditingController _specializationController;
   late TextEditingController _bioController;
 
@@ -41,7 +39,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _initControllers();
-    // _loadProfile() sẽ được gọi sau khi context sẵn sàng để lấy AuthService
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProfile();
     });
@@ -56,7 +53,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _allergiesController = TextEditingController();
     _emergencyContactNameController = TextEditingController();
     _emergencyContactPhoneController = TextEditingController();
-    // Khởi tạo controllers cho Bác sĩ
     _specializationController = TextEditingController();
     _bioController = TextEditingController();
   }
@@ -77,14 +73,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
-    // Lấy thông tin vai trò từ AuthService
     final authService = Provider.of<AuthService>(context, listen: false);
     final role = authService.user?['role'] ?? 'patient';
 
     setState(() {
       _isLoading = true;
       _errorMessage = null;
-      _userRole = role; // Lưu vai trò
+      _userRole = role;
     });
 
     try {
@@ -93,13 +88,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (role == 'doctor') {
         result = await _apiService.getDoctorProfile();
       } else {
-        // Bao gồm 'patient' và các vai trò khác mặc định
         result = await _apiService.getMyProfile();
       }
 
+      print("🔍 LOAD PROFILE RESPONSE ($role): $result");
+
       if (result['success']) {
+        Map<String, dynamic> profileData;
+
+        if (result['data'] is Map<String, dynamic>) {
+          profileData = result['data'];
+        } else {
+          profileData = result;
+        }
+
+        print("🔍 PROFILE DATA: $profileData");
+
         setState(() {
-          _profile = result['data'];
+          _profile = profileData;
           _populateControllers();
           _isLoading = false;
         });
@@ -110,6 +116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (e) {
+      print("❌ LOAD PROFILE ERROR: $e");
       setState(() {
         _errorMessage = 'Lỗi kết nối: $e';
         _isLoading = false;
@@ -117,12 +124,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // Trong _ProfileScreenState
   void _populateControllers() {
     if (_profile == null) return;
 
-    final Map<String, dynamic> user = _profile!['user'] ?? _profile!;
-    final Map<String, dynamic> patient = _profile!['patient'] ?? _profile!;
+    print("🔍 POPULATING CONTROLLERS - Role: $_userRole");
+    print("🔍 PROFILE STRUCTURE: ${_profile!.keys}");
+
+    Map<String, dynamic> user;
+    Map<String, dynamic> specificInfo;
+
+    if (_userRole == 'doctor') {
+      user = _profile!['user'] ?? {};
+      specificInfo = _profile!['doctor'] ?? {};
+      print("🔍 DOCTOR USER: $user");
+      print("🔍 DOCTOR INFO: $specificInfo");
+    } else {
+      user = _profile!['user'] ?? {};
+      specificInfo = _profile!['patient'] ?? {};
+      print("🔍 PATIENT USER: $user");
+      print("🔍 PATIENT INFO: $specificInfo");
+    }
 
     _fullNameController.text = user['full_name'] ?? '';
     _phoneController.text = user['phone'] ?? '';
@@ -134,19 +155,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user['date_of_birth'] != null) {
       try {
         _dateOfBirth = DateTime.parse(user['date_of_birth']);
+        print("🔍 DATE OF BIRTH: $_dateOfBirth");
       } catch (e) {
+        print("❌ PARSE DATE ERROR: $e");
         _dateOfBirth = null;
       }
     } else {
       _dateOfBirth = null;
     }
 
-    _bloodTypeController.text = patient['blood_type'] ?? '';
-    _allergiesController.text = patient['allergies'] ?? '';
-    _emergencyContactNameController.text =
-        patient['emergency_contact_name'] ?? '';
-    _emergencyContactPhoneController.text =
-        patient['emergency_contact_phone'] ?? '';
+    if (_userRole != 'doctor') {
+      _bloodTypeController.text = specificInfo['blood_type'] ?? '';
+      _allergiesController.text = specificInfo['allergies'] ?? '';
+      _emergencyContactNameController.text =
+          specificInfo['emergency_contact_name'] ?? '';
+      _emergencyContactPhoneController.text =
+          specificInfo['emergency_contact_phone'] ?? '';
+    } else {
+      _specializationController.text = specificInfo['specialization'] ?? '';
+      _bioController.text = specificInfo['bio'] ?? '';
+      print("🔍 SPECIALIZATION: ${_specializationController.text}");
+      print("🔍 BIO: ${_bioController.text}");
+    }
+
+    print("✅ CONTROLLERS POPULATED");
 
     if (mounted) {
       setState(() {});
@@ -158,7 +190,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isLoading = true);
 
-    // Dữ liệu chung
     final updateData = {
       'full_name': _fullNameController.text.trim(),
       'phone': _phoneController.text.trim(),
@@ -168,7 +199,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       'date_of_birth': _dateOfBirth?.toIso8601String().split('T')[0],
     };
 
-    // Dữ liệu riêng biệt
     if (_userRole != 'doctor') {
       updateData.addAll({
         'blood_type': _bloodTypeController.text.trim(),
@@ -180,19 +210,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       updateData.addAll({
         'specialization': _specializationController.text.trim(),
         'bio': _bioController.text.trim(),
-        // Thêm các trường Doctor khác nếu cần (experience_years, consultation_fee...)
       });
     }
 
+    print("🔍 SAVE PROFILE - Role: $_userRole");
+    print("🔍 UPDATE DATA: $updateData");
+
     try {
-      final result = await _apiService.updateMyProfile(
-          updateData); // API này cần xử lý cả Patient và Doctor
+      final result = (_userRole == 'doctor')
+          ? await _apiService.updateDoctorProfile(updateData)
+          : await _apiService.updateMyProfile(updateData);
+
+      print("🔍 SAVE RESULT: $result");
 
       if (result['success']) {
         setState(() {
           _isEditing = false;
           _isLoading = false;
         });
+
+        if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -201,9 +238,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
 
-        _loadProfile();
+        await _loadProfile();
       } else {
         setState(() => _isLoading = false);
+
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result['error'] ?? 'Cập nhật thất bại'),
@@ -212,7 +252,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       }
     } catch (e) {
+      print("❌ SAVE PROFILE ERROR: $e");
       setState(() => _isLoading = false);
+
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Lỗi: $e'),
@@ -277,18 +321,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildProfileView() {
     if (_profile == null) return const SizedBox();
 
-    // Dữ liệu chung
-    final user = (_userRole == 'doctor' ? _profile!['user'] : _profile) ?? {};
-
-    // Dữ liệu riêng biệt
+    // ✅ SỬA: Lấy đúng cấu trúc cho cả Patient và Doctor
+    final user = _profile!['user'] ?? {};
     final specificInfo =
         (_userRole == 'doctor' ? _profile!['doctor'] : _profile!['patient']) ??
             {};
 
+    print("🔍 BUILD PROFILE VIEW - Role: $_userRole");
+    print("🔍 USER DATA: ${user['full_name']}");
+    print(
+        "🔍 SPECIFIC INFO: ${specificInfo['patient_code'] ?? specificInfo['specialization']}");
+
     return SingleChildScrollView(
       child: Column(
         children: [
-          // Avatar Section
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
@@ -372,8 +418,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-
-          // Info Section
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -391,11 +435,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildInfoRow('Địa chỉ', user['address'] ?? 'Chưa cập nhật',
                       maxLines: 2),
                 ]),
-
                 const SizedBox(height: 20),
-
-                if (_userRole != 'doctor') // Hiển thị cho Patient
-                  ...[
+                if (_userRole != 'doctor') ...[
                   _buildSectionTitle('Thông tin y tế', Icons.medical_services),
                   _buildInfoCard([
                     _buildInfoRow('Nhóm máu',
@@ -420,8 +461,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         specificInfo['emergency_contact_phone'] ??
                             'Chưa cập nhật'),
                   ]),
-                ] else // Hiển thị cho Doctor
-                  ...[
+                ] else ...[
                   _buildSectionTitle('Thông tin công việc', Icons.work),
                   _buildInfoCard([
                     _buildInfoRow('Chuyên môn',
@@ -435,16 +475,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         maxLines: 5),
                   ]),
                 ],
-
                 const SizedBox(height: 20),
-
-                // Action buttons
                 _buildActionButton(
                   'Đổi mật khẩu',
                   Icons.lock_outline,
                   Colors.orange,
                   () {
-                    // Mở màn hình đổi mật khẩu
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -470,7 +506,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             _buildSectionTitle('Thông tin cá nhân', Icons.person),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _fullNameController,
               decoration: const InputDecoration(
@@ -486,7 +521,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             const SizedBox(height: 16),
-
             DropdownButtonFormField<String>(
               value: (['Nam', 'Nữ', 'Khác'].contains(_selectedGender))
                   ? _selectedGender
@@ -504,7 +538,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onChanged: (value) => setState(() => _selectedGender = value),
             ),
             const SizedBox(height: 16),
-
             InkWell(
               onTap: () async {
                 final date = await showDatePicker(
@@ -531,7 +564,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _phoneController,
               decoration: const InputDecoration(
@@ -548,7 +580,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _emailController,
               decoration: const InputDecoration(
@@ -569,7 +600,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             const SizedBox(height: 16),
-
             TextFormField(
               controller: _addressController,
               decoration: const InputDecoration(
@@ -579,12 +609,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               maxLines: 2,
             ),
-
             const SizedBox(height: 24),
-
-            // Hiển thị form chỉnh sửa cho Patient/Doctor
-            if (_userRole != 'doctor') // Patient fields
-              ...[
+            if (_userRole != 'doctor') ...[
               _buildSectionTitle('Thông tin y tế', Icons.medical_services),
               const SizedBox(height: 12),
               TextFormField(
@@ -628,8 +654,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 keyboardType: TextInputType.phone,
               ),
-            ] else // Doctor fields
-              ...[
+            ] else ...[
               _buildSectionTitle('Thông tin công việc', Icons.work),
               const SizedBox(height: 12),
               TextFormField(
@@ -657,10 +682,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 maxLines: 5,
               ),
             ],
-
             const SizedBox(height: 32),
-
-            // Buttons
             Row(
               children: [
                 Expanded(
@@ -821,7 +843,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return 'Chưa cập nhật';
   }
 
-  // Convert various backend/english values to the dropdown canonical values
   String? _normalizeGenderValue(dynamic gender) {
     if (gender == null) return null;
     final g = gender.toString().trim().toLowerCase();

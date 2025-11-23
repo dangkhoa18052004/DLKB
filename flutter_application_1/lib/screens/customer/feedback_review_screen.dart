@@ -5,7 +5,6 @@ import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../../services/api_service.dart';
 
 class FeedbackReviewScreen extends StatefulWidget {
-  // appointmentId là bắt buộc cho việc gửi đánh giá
   final int? appointmentId;
   final String? appointmentCode;
   final String? doctorName;
@@ -50,7 +49,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
   @override
   void initState() {
     super.initState();
-    // Chuyển sang tab Đánh giá (index 1) nếu có sẵn appointmentId
     _tabController = TabController(
       length: 3,
       vsync: this,
@@ -115,7 +113,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
         ),
       );
 
-      // Clear form
       _feedbackSubjectController.clear();
       _feedbackMessageController.clear();
       setState(() {
@@ -134,7 +131,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
 
   Future<void> _submitReview() async {
     if (widget.appointmentId == null) {
-      // HIỂN THỊ LỖI NẾU KHÔNG CÓ LỊCH HẸN ĐỂ ĐÁNH GIÁ
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Vui lòng chọn lịch hẹn đã hoàn thành để đánh giá'),
@@ -169,10 +165,8 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
         ),
       );
 
-      // Reload reviews
       _loadMyReviews();
 
-      // Clear form
       _reviewCommentController.clear();
       setState(() {
         _overallRating = 5.0;
@@ -181,7 +175,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
         _isAnonymous = false;
       });
 
-      // Chuyển sang tab Đã đánh giá
       _tabController.animateTo(2);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -212,18 +205,20 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildFeedbackTab(),
-          _buildReviewTab(),
-          _buildMyReviewsTab(),
-        ],
+      // ✅ BỌC BODY TRONG SafeArea
+      body: SafeArea(
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildFeedbackTab(),
+            _buildReviewTab(),
+            _buildMyReviewsTab(),
+          ],
+        ),
       ),
     );
   }
 
-  // TAB 1: Gửi Phản hồi
   Widget _buildFeedbackTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -268,10 +263,7 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // Feedback Type
             const Text(
               'Loại phản hồi',
               style: TextStyle(
@@ -301,10 +293,7 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
                 });
               },
             ),
-
             const SizedBox(height: 20),
-
-            // Priority
             const Text(
               'Mức độ ưu tiên',
               style: TextStyle(
@@ -338,10 +327,7 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
                 });
               },
             ),
-
             const SizedBox(height: 20),
-
-            // Subject
             const Text(
               'Tiêu đề',
               style: TextStyle(
@@ -366,10 +352,7 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
                 return null;
               },
             ),
-
             const SizedBox(height: 20),
-
-            // Message
             const Text(
               'Nội dung phản hồi',
               style: TextStyle(
@@ -398,10 +381,7 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
                 return null;
               },
             ),
-
             const SizedBox(height: 32),
-
-            // Submit Button
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -430,9 +410,7 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
     );
   }
 
-  // TAB 2: Đánh giá
   Widget _buildReviewTab() {
-    // Nếu không có appointmentId, hiển thị thông báo hướng dẫn
     if (widget.appointmentId == null) {
       return Center(
         child: Padding(
@@ -460,7 +438,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
       );
     }
 
-    // Nếu có appointmentId, hiển thị form đánh giá
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Form(
@@ -468,7 +445,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Appointment Info
             Card(
               elevation: 2,
               color: Colors.blue.shade50,
@@ -503,8 +479,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
               ),
             ),
             const SizedBox(height: 24),
-
-            // Overall Rating
             const Text(
               'Đánh giá tổng thể',
               style: TextStyle(
@@ -545,28 +519,19 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
                 ],
               ),
             ),
-
             const SizedBox(height: 32),
-
-            // Service Rating
             _buildRatingRow(
               'Chất lượng dịch vụ',
               _serviceRating,
               (rating) => setState(() => _serviceRating = rating),
             ),
-
             const SizedBox(height: 20),
-
-            // Facility Rating
             _buildRatingRow(
               'Cơ sở vật chất',
               _facilityRating,
               (rating) => setState(() => _facilityRating = rating),
             ),
-
             const SizedBox(height: 32),
-
-            // Comment
             const Text(
               'Nhận xét chi tiết',
               style: TextStyle(
@@ -586,10 +551,7 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
               ),
               maxLines: 5,
             ),
-
             const SizedBox(height: 20),
-
-            // Anonymous Option
             CheckboxListTile(
               value: _isAnonymous,
               onChanged: (value) {
@@ -605,10 +567,7 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
                 side: BorderSide(color: Colors.grey.shade300),
               ),
             ),
-
             const SizedBox(height: 32),
-
-            // Submit Button
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -639,7 +598,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
     );
   }
 
-  // TAB 3: My Reviews
   Widget _buildMyReviewsTab() {
     if (_isLoadingReviews) {
       return const Center(child: CircularProgressIndicator());
@@ -717,7 +675,6 @@ class _FeedbackReviewScreenState extends State<FeedbackReviewScreen>
   }
 
   Widget _buildReviewCard(Map<String, dynamic> review) {
-    // Ép kiểu an toàn hơn và cung cấp giá trị mặc định nếu null
     final isApproved = review['is_approved'] == true;
     final rating = (review['rating'] ?? 0).toDouble();
 

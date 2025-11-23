@@ -30,7 +30,6 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
     {'value': null, 'label': 'Tất cả', 'color': Colors.grey},
     {'value': 'pending', 'label': 'Chờ xác nhận', 'color': Colors.orange},
     {'value': 'confirmed', 'label': 'Đã xác nhận', 'color': Colors.blue},
-    // {'value': 'checked_in', 'label': 'Đã check-in', 'color': Colors.purple},
     {'value': 'completed', 'label': 'Hoàn thành', 'color': Colors.green},
     {'value': 'cancelled', 'label': 'Đã hủy', 'color': Colors.red},
     {'value': 'no_show', 'label': 'Không đến', 'color': Colors.grey},
@@ -71,7 +70,6 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
     }
   }
 
-  // ===== CHỨC NĂNG CẬP NHẬT TRẠNG THÁI =====
   Future<void> _showStatusUpdateDialog(Map<String, dynamic> appointment) async {
     final currentStatus = appointment['status'];
     String? newStatus;
@@ -240,7 +238,6 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
     )['color'];
   }
 
-  // ===== FILTER UI =====
   Widget _buildFilterSection() {
     return Card(
       margin: const EdgeInsets.all(16),
@@ -377,7 +374,6 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
     );
   }
 
-  // ===== LIST UI =====
   Widget _buildAppointmentsList() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -555,11 +551,14 @@ class _AdminAppointmentsScreenState extends State<AdminAppointmentsScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildFilterSection(),
-          Expanded(child: _buildAppointmentsList()),
-        ],
+      // ✅ THÊM SafeArea BỌC BODY
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildFilterSection(),
+            Expanded(child: _buildAppointmentsList()),
+          ],
+        ),
       ),
     );
   }
