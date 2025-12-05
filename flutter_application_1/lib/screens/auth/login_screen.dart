@@ -211,17 +211,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 16),
 
                         // Quên mật khẩu
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) =>
-                                      const ForgotPasswordScreen()),
-                            );
-                          },
-                          child: const Text('Quên mật khẩu?'),
-                        ),
+                        // TextButton(
+                        //   onPressed: () {
+                        //     Navigator.push(
+                        //       context,
+                        //       MaterialPageRoute(
+                        //           builder: (context) =>
+                        //               const ForgotPasswordScreen()),
+                        //     );
+                        //   },
+                        //   // child: const Text('Quên mật khẩu?'),
+                        // ),
 
                         // Đăng ký
                         TextButton(

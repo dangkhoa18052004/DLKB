@@ -19,14 +19,12 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  // Filter và phân trang
   int _currentPage = 1;
   final int _perPage = 20;
   int? _selectedDepartmentId;
   bool? _isAvailableFilter;
   String _searchQuery = '';
 
-  // Thống kê
   Map<String, dynamic> _stats = {};
 
   @override
@@ -172,25 +170,23 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Bộ lọc
-          _buildFilters(),
-
-          // Thống kê
-          _buildStatsCard(),
-
-          // Danh sách bác sĩ
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _errorMessage != null
-                    ? _buildErrorWidget()
-                    : _doctors.isEmpty
-                        ? _buildEmptyWidget()
-                        : _buildDoctorsList(),
-          ),
-        ],
+      // ✅ THÊM SafeArea
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildFilters(),
+            _buildStatsCard(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _errorMessage != null
+                      ? _buildErrorWidget()
+                      : _doctors.isEmpty
+                          ? _buildEmptyWidget()
+                          : _buildDoctorsList(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -201,27 +197,39 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ✅ SỬA DROPDOWN ĐỂ TRÁNH OVERFLOW
             Row(
               children: [
-                // Lọc theo khoa
+                // Dropdown 1: Chuyên khoa
                 Expanded(
                   child: DropdownButtonFormField<int?>(
                     value: _selectedDepartmentId,
+                    isExpanded: true, // ✅ QUAN TRỌNG
                     decoration: const InputDecoration(
-                      labelText: 'Chuyên khoa',
+                      labelText: 'Khoa',
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                     ),
                     items: [
                       const DropdownMenuItem(
                         value: null,
-                        child: Text('Tất cả khoa'),
+                        child: Text('Tất cả', overflow: TextOverflow.ellipsis),
                       ),
-                      ..._departments.map((dept) => DropdownMenuItem(
-                            value: dept.id,
-                            child: Text(dept.name),
-                          )),
+                      ..._departments.map(
+                        (dept) => DropdownMenuItem(
+                          value: dept.id,
+                          child: Text(
+                            dept.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
                     ],
                     onChanged: (value) {
                       setState(() {
@@ -230,29 +238,36 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
                     },
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
 
-                // Lọc trạng thái
+                // Dropdown 2: Trạng thái
                 Expanded(
                   child: DropdownButtonFormField<bool?>(
                     value: _isAvailableFilter,
+                    isExpanded: true, // ✅ QUAN TRỌNG
                     decoration: const InputDecoration(
                       labelText: 'Trạng thái',
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                     ),
-                    items: [
-                      const DropdownMenuItem(
+                    items: const [
+                      DropdownMenuItem(
                         value: null,
-                        child: Text('Tất cả'),
+                        child: Text('Tất cả', overflow: TextOverflow.ellipsis),
                       ),
-                      const DropdownMenuItem(
+                      DropdownMenuItem(
                         value: true,
-                        child: Text('Đang hoạt động'),
+                        child:
+                            Text('Hoạt động', overflow: TextOverflow.ellipsis),
                       ),
-                      const DropdownMenuItem(
+                      DropdownMenuItem(
                         value: false,
-                        child: Text('Không hoạt động'),
+                        child:
+                            Text('Không HĐ', overflow: TextOverflow.ellipsis),
                       ),
                     ],
                     onChanged: (value) {
@@ -265,13 +280,15 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
               ],
             ),
             const SizedBox(height: 12),
+
+            // Nút hành động
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: _applyFilters,
-                    icon: const Icon(Icons.search),
-                    label: const Text('Áp dụng bộ lọc'),
+                    icon: const Icon(Icons.search, size: 18),
+                    label: const Text('Áp dụng'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
@@ -281,7 +298,7 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
                   onPressed: _resetFilters,
-                  icon: const Icon(Icons.clear),
+                  icon: const Icon(Icons.clear, size: 18),
                   label: const Text('Đặt lại'),
                 ),
               ],
@@ -301,8 +318,7 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildStatItem('Tổng số', _stats['total']?.toString() ?? '0'),
-            _buildStatItem(
-                'Đang hoạt động', _stats['available']?.toString() ?? '0'),
+            _buildStatItem('Hoạt động', _stats['available']?.toString() ?? '0'),
             _buildStatItem('Đánh giá TB',
                 (_stats['averageRating'] ?? 0).toStringAsFixed(1)),
             _buildStatItem(
@@ -322,7 +338,8 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
         ),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
+          style: const TextStyle(fontSize: 11, color: Colors.grey),
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );
@@ -375,17 +392,20 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
             title: Text(
               doctor.fullName,
               style: const TextStyle(fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Chuyên môn: ${doctor.specialization}'),
-                Text('Khoa: ${_getDepartmentName(doctor.departmentId)}'),
+                Text('Chuyên môn: ${doctor.specialization}',
+                    overflow: TextOverflow.ellipsis),
+                Text('Khoa: ${_getDepartmentName(doctor.departmentId)}',
+                    overflow: TextOverflow.ellipsis),
                 Text(
                     'Phí khám: ${doctor.consultationFee.toStringAsFixed(0)} ₫'),
                 Row(
                   children: [
-                    Icon(Icons.star, color: Colors.amber, size: 16),
+                    const Icon(Icons.star, color: Colors.amber, size: 16),
                     Text(' ${doctor.rating.toStringAsFixed(1)}'),
                     Text(' (${doctor.totalReviews} reviews)'),
                   ],
@@ -428,7 +448,7 @@ class _AdminDoctorsScreenState extends State<AdminDoctorsScreen> {
     try {
       return _departments.firstWhere((dept) => dept.id == departmentId).name;
     } catch (e) {
-      return 'Không xác định';
+      return 'N/A';
     }
   }
 
@@ -510,7 +530,7 @@ class DoctorDetailDialog extends StatelessWidget {
   }
 }
 
-// Dialog chỉnh sửa bác sĩ
+// Dialog chỉnh sửa (giữ nguyên)
 class EditDoctorDialog extends StatefulWidget {
   final Doctor doctor;
   final List<Department> departments;
@@ -665,7 +685,7 @@ class _EditDoctorDialogState extends State<EditDoctorDialog> {
   }
 }
 
-// Dialog lịch làm việc
+// Dialog lịch làm việc (giữ nguyên)
 class DoctorScheduleDialog extends StatefulWidget {
   final int doctorId;
 

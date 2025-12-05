@@ -7,8 +7,6 @@ import 'package:hospital_admin_app/screens/notifications_screen.dart';
 import 'package:hospital_admin_app/screens/profile_screen.dart';
 import 'doctor_appointment_list_screen.dart';
 import 'doctor_profile_screen.dart';
-
-// ✅ IMPORT CÁC MÀN HÌNH MỚI
 import 'register_schedule_screen.dart';
 import 'doctor_schedule_management_screen.dart';
 import 'doctor_stats_screen.dart';
@@ -130,19 +128,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     );
   }
 
-  Widget _buildRatingStars(double rating) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(5, (index) {
-        return Icon(
-          index < rating.floor() ? Icons.star : Icons.star_border,
-          color: Colors.amber,
-          size: 18,
-        );
-      }),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -197,33 +182,36 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline,
-                          size: 64, color: Colors.red.shade300),
-                      const SizedBox(height: 16),
-                      Text('Lỗi: $_errorMessage', textAlign: TextAlign.center),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _loadDashboardData,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Thử lại'),
-                      ),
-                    ],
-                  ),
-                )
-              : _buildDashboardContent(),
+      // ✅ THÊM SafeArea
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage != null
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline,
+                            size: 64, color: Colors.red.shade300),
+                        const SizedBox(height: 16),
+                        Text('Lỗi: $_errorMessage',
+                            textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: _loadDashboardData,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Thử lại'),
+                        ),
+                      ],
+                    ),
+                  )
+                : _buildDashboardContent(),
+      ),
     );
   }
 
   Widget _buildDashboardContent() {
     final doctorName = _profileData?['full_name'] ?? 'Bác sĩ';
-    final currentRating = (_profileData?['rating'] as num?)?.toDouble() ?? 0.0;
     final isAvailable = _profileData?['is_available'] ?? true;
 
     return SingleChildScrollView(
@@ -280,6 +268,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -309,17 +298,16 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                         size: 18,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        'Trạng thái: ${isAvailable ? 'Đang Sẵn có' : 'Không hoạt động'}',
-                        style: TextStyle(
-                          color: isAvailable ? Colors.green : Colors.red,
-                          fontWeight: FontWeight.bold,
+                      Flexible(
+                        child: Text(
+                          'Trạng thái: ${isAvailable ? 'Đang Sẵn có' : 'Không hoạt động'}',
+                          style: TextStyle(
+                            color: isAvailable ? Colors.green : Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_ios,
-                          size: 12,
-                          color: isAvailable ? Colors.green : Colors.red),
                     ],
                   ),
                 ),
@@ -332,7 +320,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // === STATS SECTION ===
                 Text(
                   'Tổng quan Lịch hẹn Hôm nay',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -341,13 +328,14 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 ),
                 const SizedBox(height: 16),
 
+                // ✅ SỬA GRID - TĂNG childAspectRatio
                 GridView.count(
                   crossAxisCount: 2,
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 1.3,
+                  childAspectRatio: 1.4, // Tăng từ 1.3 lên 1.4
                   children: [
                     _buildStatCard(
                       'Tổng Lịch hẹn',
@@ -378,7 +366,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
 
                 const SizedBox(height: 24),
 
-                // === PERFORMANCE SECTION ===
                 Text(
                   'Hiệu suất và Quản lý',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -387,50 +374,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Rating Card
-                // Card(
-                //   elevation: 2,
-                //   shape: RoundedRectangleBorder(
-                //     borderRadius: BorderRadius.circular(12),
-                //   ),
-                //   child: ListTile(
-                //     contentPadding: const EdgeInsets.all(16),
-                //     leading: Container(
-                //       padding: const EdgeInsets.all(12),
-                //       decoration: BoxDecoration(
-                //         color: Colors.amber.shade50,
-                //         borderRadius: BorderRadius.circular(12),
-                //       ),
-                //       child: const Icon(Icons.star, color: Colors.amber),
-                //     ),
-                //     // title: const Text('Đánh giá trung bình',
-                //     //     style: TextStyle(fontWeight: FontWeight.bold)),
-                //     // subtitle: Padding(
-                //     //   padding: const EdgeInsets.only(top: 8),
-                //     //   child: _buildRatingStars(currentRating),
-                //     // ),
-                //     trailing: Column(
-                //       mainAxisAlignment: MainAxisAlignment.center,
-                //       crossAxisAlignment: CrossAxisAlignment.end,
-                //       children: [
-                //         Text(
-                //           currentRating.toStringAsFixed(1),
-                //           style: const TextStyle(
-                //             fontWeight: FontWeight.bold,
-                //             fontSize: 24,
-                //             color: Colors.amber,
-                //           ),
-                //         ),
-                //         const Text('/ 5.0',
-                //             style: TextStyle(fontSize: 12, color: Colors.grey)),
-                //       ],
-                //     ),
-                //   ),
-                // ),
-                // const SizedBox(height: 12),
-
-                // ✅ QUICK ACTIONS - ĐÂY LÀ CHỖ THÊM NÚT
-                // VỊ TRÍ 1: Thống kê cá nhân (mới)
                 _buildActionButton(
                   context,
                   title: 'Thống kê Cá nhân',
@@ -441,7 +384,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // VỊ TRÍ 2: Quản lý lịch làm việc (mới)
                 _buildActionButton(
                   context,
                   title: 'Quản lý Lịch làm việc',
@@ -453,19 +395,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // VỊ TRÍ 3: Tạo ca mới (đã có từ trước)
-                // _buildActionButton(
-                //   context,
-                //   title: 'Tạo Ca Làm Việc Mới',
-                //   subtitle: 'Đăng ký lịch làm việc (giờ/ngày) cho bạn',
-                //   icon: Icons.access_time_filled,
-                //   color: Colors.pink,
-                //   onTap: () =>
-                //       _navigateAndRefresh(const RegisterScheduleScreen()),
-                // ),
-                // const SizedBox(height: 8),
-
-                // VỊ TRÍ 4: Quản lý lịch hẹn (đã có từ trước)
                 _buildActionButton(
                   context,
                   title: 'Quản lý Lịch hẹn',
@@ -477,7 +406,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // VỊ TRÍ 5: Hồ sơ cá nhân (đã có từ trước)
                 _buildActionButton(
                   context,
                   title: 'Hồ sơ cá nhân & Lịch',
@@ -500,7 +428,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12), // Giảm padding
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
@@ -514,27 +442,30 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6), // Giảm padding
               decoration: BoxDecoration(
                 color: color.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon, color: color, size: 24),
+              child: Icon(icon, color: color, size: 20), // Giảm size
             ),
             const Spacer(),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: color,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontSize: 28, // Giảm từ 32
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               title,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11, // Giảm từ 12
                 fontWeight: FontWeight.w600,
                 color: Colors.grey.shade700,
               ),
@@ -590,6 +521,8 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
                     Text(
                       subtitle,
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

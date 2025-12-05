@@ -310,7 +310,14 @@ class _FeedbackListViewState extends State<_FeedbackListView> {
   int _totalItems = 0;
 
   String? _selectedStatus; // Filter
-  final List<String> _statuses = ['new', 'in_progress', 'resolved', 'closed'];
+  // ✅ ĐÃ THÊM TRẠNG THÁI 'pending'
+  final List<String> _statuses = [
+    'pending',
+    'new',
+    'in_progress',
+    'resolved',
+    'closed'
+  ];
 
   @override
   void initState() {
@@ -352,57 +359,68 @@ class _FeedbackListViewState extends State<_FeedbackListView> {
 
   void _showRespondDialog(int feedbackId, String currentStatus) {
     final TextEditingController responseController = TextEditingController();
-    String newStatus = currentStatus;
 
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Phản hồi Phản hồi'),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                TextField(
-                  controller: responseController,
-                  maxLines: 5,
-                  decoration: const InputDecoration(
-                    labelText: 'Nội dung phản hồi',
-                    border: OutlineInputBorder(),
-                  ),
+        // ✅ SỬ DỤNG StatefulBuilder ĐỂ KHẮC PHỤC LỖI ASSERTION
+        return StatefulBuilder(
+          builder: (context, setInnerState) {
+            String newStatus = currentStatus; // Biến trạng thái cục bộ
+
+            return AlertDialog(
+              title: const Text('Phản hồi Phản hồi'),
+              content: SingleChildScrollView(
+                child: ListBody(
+                  children: <Widget>[
+                    TextField(
+                      controller: responseController,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Nội dung phản hồi',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      // Giá trị phải khớp chính xác với một item trong danh sách
+                      value: newStatus,
+                      decoration:
+                          const InputDecoration(labelText: 'Trạng thái mới'),
+                      items: _statuses
+                          .map(
+                              (s) => DropdownMenuItem(value: s, child: Text(s)))
+                          .toList(),
+                      onChanged: (String? newValue) {
+                        if (newValue != null) {
+                          setInnerState(() {
+                            // Cập nhật trạng thái cục bộ
+                            newStatus = newValue;
+                          });
+                        }
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: newStatus,
-                  decoration:
-                      const InputDecoration(labelText: 'Trạng thái mới'),
-                  items: _statuses
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      newStatus = newValue;
-                    }
+              ),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Hủy'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+                ElevatedButton(
+                  child: const Text('Gửi'),
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await _handleRespondAction(
+                        feedbackId, responseController.text, newStatus);
                   },
                 ),
               ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Hủy'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('Gửi'),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await _handleRespondAction(
-                    feedbackId, responseController.text, newStatus);
-              },
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -438,6 +456,8 @@ class _FeedbackListViewState extends State<_FeedbackListView> {
 
   Color _getStatusColor(String status) {
     switch (status) {
+      case 'pending':
+        return Colors.orange; // Thêm màu cho pending
       case 'new':
         return Colors.red;
       case 'in_progress':
@@ -475,15 +495,18 @@ class _FeedbackListViewState extends State<_FeedbackListView> {
   Widget _buildFeedbackFilterBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: DropdownButton<String>(
+      child: DropdownButton<String?>(
+        // ✅ Thay đổi thành String?
         hint: const Text('Trạng thái'),
         value: _selectedStatus,
         items: [
-          const DropdownMenuItem<String>(
+          const DropdownMenuItem<String?>(
+            // ✅ Thay đổi thành String?
             value: null,
             child: Text('Tất cả Trạng thái'),
           ),
-          ..._statuses.map((status) => DropdownMenuItem<String>(
+          ..._statuses.map((status) => DropdownMenuItem<String?>(
+                // ✅ Thay đổi thành String?
                 value: status,
                 child: Text(status.toUpperCase()),
               )),
@@ -529,7 +552,8 @@ class _FeedbackListViewState extends State<_FeedbackListView> {
               ],
             ),
             trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // Giữ min cho chiều cao
               children: [
                 Container(
                   padding:
@@ -543,12 +567,17 @@ class _FeedbackListViewState extends State<_FeedbackListView> {
                     style: TextStyle(fontSize: 10, color: statusColor),
                   ),
                 ),
-                const SizedBox(height: 4),
-                IconButton(
-                  icon: const Icon(Icons.reply, color: Colors.blue),
-                  tooltip: 'Phản hồi',
-                  onPressed: () => _showRespondDialog(
-                      feedback['id'] as int, feedback['status'] as String),
+                // const SizedBox(height: 4), // Xóa hoặc giảm bớt khoảng cách này
+                // Giảm kích thước của IconButton để tiết kiệm không gian
+                SizedBox(
+                  height: 32, // Giảm chiều cao IconButton mặc định 48 xuống 32
+                  child: IconButton(
+                    icon: const Icon(Icons.reply,
+                        color: Colors.blue, size: 20), // Giảm size icon
+                    tooltip: 'Phản hồi',
+                    onPressed: () => _showRespondDialog(
+                        feedback['id'] as int, feedback['status'] as String),
+                  ),
                 ),
               ],
             ),

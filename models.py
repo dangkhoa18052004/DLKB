@@ -216,8 +216,9 @@ class MedicalRecord(db.Model):
     is_follow_up = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+    appointment = db.relationship("Appointment", backref="medical_records")
     patient = db.relationship("Patient", backref="medical_records")
+    doctor = db.relationship("Doctor", backref="medical_records_created")
 
 # --- 11. BẢNG ĐƠN THUỐC (Prescriptions) ---
 class Prescription(db.Model):
@@ -299,7 +300,7 @@ class Review(db.Model):
     facility_rating = db.Column(db.Integer)
     comment = db.Column(db.Text)
     is_anonymous = db.Column(db.Boolean, default=False)
-    is_approved = db.Column(db.Boolean, default=False)
+    is_approved = db.Column(db.Boolean, default=True)
     approved_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     approved_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -332,6 +333,9 @@ class Feedback(db.Model):
     responded_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user = db.relationship("User", foreign_keys=[user_id], backref="feedback_submitted")
+    assignee = db.relationship("User", foreign_keys=[assigned_to], backref="feedback_assigned")
+    responder = db.relationship("User", foreign_keys=[responded_by], backref="feedback_responded")
 
     __table_args__ = (
         CheckConstraint(type.in_(['complaint', 'suggestion', 'compliment', 'question', 'other']), name='check_feedback_type'),

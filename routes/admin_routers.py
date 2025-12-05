@@ -825,7 +825,9 @@ def get_all_feedback():
     query = Feedback.query.outerjoin(User, Feedback.user_id == User.id)
     
     if status:
-        query = query.filter_by(status=status)
+        # SỬA LỖI 2: filter_by chỉ dùng cho thuộc tính của entity chính (User ở đây), 
+        # phải dùng filter(Feedback.status == status) để chỉ định rõ Feedback
+        query = query.filter(Feedback.status == status)
     if priority:
         query = query.filter_by(priority=priority)
     
@@ -837,7 +839,7 @@ def get_all_feedback():
     for feedback in pagination.items:
         results.append({
             'id': feedback.id,
-            'user_name': feedback.patient.user.full_name if feedback.patient else 'Anonymous',
+            'user_name': feedback.user.full_name if feedback.user else 'Anonymous',
             'type': feedback.type,
             'subject': feedback.subject,
             'message': feedback.message,
